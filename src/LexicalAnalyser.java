@@ -4,57 +4,85 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class LexicalAnalyser {
+    
+    /**
+     * Scans the given txt file (its 1st line) and produces a list of tokens for it.
+     *
+     * @param textFile file {@link File} containing string to be tokenised
+     * @return list of tokens {@link Token}
+     * @throws IOException
+     * @throws InvalidCharException
+     */
     public static List<Token> scan(File textFile) throws IOException, InvalidCharException {
         List<Token> result = new ArrayList<Token>();
 
         try (BufferedReader reader = new BufferedReader(new FileReader(textFile))) {
-            char peek = (char) reader.read();
-            // operators
-            if(peek == '+' || peek == '-' || peek == '*' || peek == '!'){
-                Token<String> token = new Token<>(TokenName.OP, String.valueOf(peek));
-            // cos operator
-            } else if (peek == 'c'){
-                String lexeme = "c";
-                peek = (char) reader.read();
-                if (peek == 'o'){
-                    lexeme += peek;
+            int peekInt = reader.read();
+            char peek = (char) peekInt;
+            boolean isNum = false;
+
+            while (peekInt != -1) {
+                isNum = false;
+
+                // operators
+                if (peek == '+' || peek == '-' || peek == '*' || peek == '!') {
+                    Token<String> token = new Token<>(TokenName.OP, String.valueOf(peek));
+                    result.add(token);
+                // cos operator
+                } else if (peek == 'c') {
+                    String lexeme = "c";
                     peek = (char) reader.read();
-                    if (peek == 's'){
+                    if (peek == 'o') {
                         lexeme += peek;
-                        Token<String> token = new Token<>(TokenName.OP, "cos");
-                        result.add(token);
-                    } else{
+                        peek = (char) reader.read();
+                        if (peek == 's') {
+                            lexeme += peek;
+                            Token<String> token = new Token<>(TokenName.OP, "cos");
+                            result.add(token);
+                        } else {
+                            throw new InvalidCharException();
+                        }
+                    } else {
                         throw new InvalidCharException();
                     }
-                } else{
+                    // numbers
+                } else if (Character.isDigit(peek)) {
+                    int v = 0;
+                    while (Character.isDigit(peek)) {
+                        v = v * 10 + Integer.parseInt(String.valueOf(peek));
+                        peekInt = reader.read();
+                        peek = (char) peekInt;
+                    }
+                    // float
+                    if (peek == '.') {
+                        peek = (char) reader.read();
+                        int d = 10;
+                        double vf = v;
+                        while (Character.isDigit(peek)) {
+                            vf += Integer.parseInt(String.valueOf(peek)) / (double) d;
+                            peekInt = reader.read();
+                            peek = (char) peekInt;
+                            d *= 10;
+                        }
+                        Token<Double> token = new Token<>(TokenName.FLOAT, vf);
+                        result.add(token);
+
+                    } else {
+                        Token<Integer> token = new Token<>(TokenName.INT, v);
+                        result.add(token);
+                    }
+
+                    isNum = true;
+
+                } else {
                     throw new InvalidCharException();
                 }
-            // numbers
-            } else if (Character.isDigit(peek)){
-                int v = 0;
-                while(Character.isDigit(peek)){
-                    v = v * 10 + Integer.parseInt(String.valueOf(peek));
-                    peek = (char) reader.read();
-                }
-                // float
-                if (peek == '.'){
-                    peek = (char) reader.read();
-                    int d = 10;
-                    double vf = v;
-                    while(Character.isDigit(peek)){
-                        vf += Integer.parseInt(String.valueOf(peek)) / (double) d;
-                        peek = (char) reader.read();
-                        d *= 10;
-                    }
-                    Token<Double> token = new Token<>(TokenName.FLOAT, vf);
-                    result.add(token);
 
-                } else{
-                    Token<Integer> token = new Token<>(TokenName.INT, v);
-                    result.add(token);
+                // update peek values for next iteration ONLY if token WAS NOT a num
+                if (!isNum) {
+                    peekInt = reader.read();
+                    peek = (char) peekInt;
                 }
-            } else{
-                throw new InvalidCharException();
             }
 
         } catch (IOException e) {
@@ -63,5 +91,4 @@ public class LexicalAnalyser {
 
         return result;
     }
-
 }
