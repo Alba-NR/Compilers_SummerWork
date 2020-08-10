@@ -6,20 +6,23 @@ import java.util.*;
 
 public class Parser {
 
-    class Production{
-        /** Class representing a production for the grammar */
+    class Production {
+        /**
+         * Class representing a production for the grammar
+         */
         private String head;
         private String body;
 
-        Production(String head, String body){
+        Production(String head, String body) {
             this.head = head;
             this.body = body;
         }
 
-        String getHead(){
+        String getHead() {
             return head;
         }
-        String getBody(){
+
+        String getBody() {
             return body;
         }
     }
@@ -39,50 +42,60 @@ public class Parser {
     }
     */
 
-    class Grammar{
+    class Grammar {
         private Set<Production> productions; // note: dif prod bodies for same nonterm stored as separate elements in set
         private Set<String> nonterminals;
         private Set<String> terminals;
 
-        Grammar(String[] nonterm, String[] term, File prodSpecification) throws IOException {
-            nonterminals = new HashSet<>(Arrays.asList(nonterm));
-            terminals = new HashSet<>(Arrays.asList(term));
-            productions = createProdFromFile(prodSpecification);
-        }
+        /**
+         * Note: the grammarSpecification file must have the following format:
+         *  - 1st line: non-terminals, separated by a comma
+         *  - 2nd line: terminals, separated by a comma
+         *  - then, one production per line
+         *  - preferably a single production per non-terminal for clarity
+         */
+        Grammar(File grammarSpecification) throws IOException {
+            productions = new HashSet<>();
 
-        private Set<Production> createProdFromFile(File prodSpecification) throws IOException {
-            Set<Production> result = new HashSet<>();
+            try (BufferedReader reader = new BufferedReader(new FileReader(grammarSpecification))) {
+                try {
+                    String nextLine = reader.readLine();  // read next line from file
+                    nonterminals = new HashSet<>(Arrays.asList(nextLine.split("\\s,\\s")));  // 1st line has non-terminals
+                    nextLine = reader.readLine();
+                    terminals = new HashSet<>(Arrays.asList(nextLine.split("\\s,\\s")));  // 2nd line has terminals
+                    nextLine = reader.readLine();
 
-            try (BufferedReader reader = new BufferedReader(new FileReader(prodSpecification))) {
-                String nextLine = reader.readLine();  // read next line from file
+                    while (nextLine != null) {
+                        // get head & prod bodies for the prod in this line
+                        String[] splitHeadBody = nextLine.split("\\s->\\s");
+                        String[] bodyProductions = splitHeadBody[1].split("\\s\\|\\s");
 
-                while(nextLine != null) {
-                    // get head & prod bodies for the prod in this line
-                    String[] splitHeadBody = nextLine.split("\\s->\\s");
-                    String[] bodyProductions = splitHeadBody[1].split("\\s\\|\\s");
+                        for (String body : bodyProductions) {  // create set of prod to return
+                            Production prod = new Production(splitHeadBody[0], body);
+                            productions.add(prod);
+                        }
 
-                    for (String body : bodyProductions) {  // create set of prod to return
-                        Production prod = new Production(splitHeadBody[0], body);
-                        result.add(prod);
+                        nextLine = reader.readLine();  // read next line
                     }
 
-                    nextLine = reader.readLine();  // read next line
+                } catch (NullPointerException e) {
+                    System.out.println("Incorrect format of input file.");
                 }
 
             } catch (IOException e) {
-                throw new IOException("Can't access file " + prodSpecification, e);
+                throw new IOException("Can't access file " + grammarSpecification, e);
             }
-
-            return result;
         }
 
         Set<Production> getProductions() {
             return new HashSet<>(productions);
         }
-        Set<String> getNonterminals(){
+
+        Set<String> getNonterminals() {
             return new HashSet<>(nonterminals);
         }
-        Set<String> getTerminals(){
+
+        Set<String> getTerminals() {
             return new HashSet<>(terminals);
         }
 
@@ -91,23 +104,20 @@ public class Parser {
 
     private Grammar grammar;
 
-    public Parser() throws IOException {
-        File prodFile = new  File("./src/grammar.txt");
-        String[] nonterm = "stmt,N,F,I,D,sign,E,S,factor,T".split(",");
-        String[] term = "0,1,2,3,4,5,6,7,8,9,.,+,-,*,cos,!".split(",");
-        this.grammar =  new Grammar(nonterm, term, prodFile);
+    public Parser(File gramSpecification) throws IOException {
+        this.grammar = new Grammar(gramSpecification);
     }
 
-    private Set<String> closure(Set<String> itemArg){
+    private Set<String> closure(Set<String> itemArg) {
         Set<String> j = itemArg;
         boolean itemAddedFlag = true; // true if an item added to j
 
-        while (itemAddedFlag){
+        while (itemAddedFlag) {
             itemAddedFlag = false;
-            for(String item : j){
-                for(Production prod : grammar.productions){
+            for (String item : j) {
+                for (Production prod : grammar.productions) {
                     String itemToAdd = prod.head + " -> · " + prod.body;
-                    if(!j.contains(itemToAdd)){
+                    if (!j.contains(itemToAdd)) {
                         j.add(itemToAdd);
                         itemAddedFlag = true;
                     }
@@ -115,5 +125,14 @@ public class Parser {
             }
         }
         return j;
+    }
+
+    public static void main(String[] args) throws IOException {
+        try {
+            File specificationFile = new File("./src/grammar.txt");
+            Parser parser = new Parser(specificationFile);
+        }catch (IOException e){
+            throw new IOException("Can't access given file.", e);
+        }
     }
 }
