@@ -1,5 +1,5 @@
 public class InvalidCharException extends Exception {
-    InvalidCharException(){
-        super();
+    InvalidCharException(char invalidChar){
+        super(invalidChar + " is an invalid character");
     }
 }

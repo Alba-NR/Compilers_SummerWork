@@ -1,7 +1,7 @@
 
 public class Token<T> {
     /**
-     * Represents a token < name , value > whose value is of type T
+     * Represents a token (of the form: < name , value > ) whose value is of type T
      */
 
     private TokenName name;
