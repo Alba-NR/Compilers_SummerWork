@@ -1,0 +1,10 @@
+stmt -> N | E
+N -> F | I
+F -> sign I . I
+I -> D I | D
+sign -> - | ε
+D -> 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+E -> E + S | E - S | S
+S -> factor * S | factor
+factor -> cos factor | T
+T -> I ! | N
