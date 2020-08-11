@@ -55,6 +55,7 @@ public class Parser {
         private String startSymbol;
 
         /**
+         * Create Grammar object from grammar specification in given file.
          * Note: the grammarSpecification file must have the following format:
          *  - 1st line: non-terminals, separated by a comma. 1st one is start symbol.
          *  - 2nd line: terminals, separated by a comma
@@ -98,6 +99,31 @@ public class Parser {
 
             } catch (IOException e) {
                 throw new IOException("Can't access file " + grammarSpecification, e);
+            }
+        }
+
+        /**
+         * Create Grammar object from another grammar (i.e. expand this grammar)
+         * @param grammar gram to expand
+         * @param addNonterm new, additiona non-terminals
+         * @param addTerm new, additional terminals
+         * @param addProd new, additional productions
+         */
+        Grammar(Grammar grammar, Set<String> addNonterm, Set<String> addTerm, Set<Production> addProd){
+            nonterminals = new HashSet<>(grammar.getNonterminals());
+            nonterminals.addAll(addNonterm);
+
+            terminals = new HashSet<>(grammar.getTerminals());
+            terminals.addAll(addTerm);
+
+            productionsSet = new HashSet<>(grammar.getProductionsSet());
+            productionsSet.addAll(addProd);
+
+            productionsMap = new HashMap<>(grammar.getProductionsMap());
+            for(Production newProd : addProd){
+                Set<String> bodies = productionsMap.getOrDefault(newProd.getHead(), new HashSet<>());
+                bodies.add(newProd.body);
+                productionsMap.put(newProd.getHead(), bodies);
             }
         }
 
@@ -202,6 +228,7 @@ public class Parser {
 
         return result;
     }
+
 
     public static void main(String[] args) throws IOException {
         try {
