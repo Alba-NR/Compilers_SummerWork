@@ -226,7 +226,12 @@ public class Parser {
         return result;
     }
 
-    private Set<String> calcCanonicalCollection(){
+    /**
+     * Calculate & return the canonical collection of sets of LR(0) items for the grammar at hand.
+     * @return canonical collection of items
+     */
+    private Set<Set<String>> calcCanonicalCollection(){
+        // create augmented grammar
         Set<String> newNonterm = new HashSet<>();
         newNonterm.add("S'");
         Set<Production> newProd = new HashSet<>();
@@ -234,7 +239,27 @@ public class Parser {
 
         Grammar augmGram = new Grammar(grammar, newNonterm, null, newProd, "S'");
 
-        return new HashSet<>(); // just to compile, must change
+        // init c (canonical collection)
+        Set<String> initISet = new HashSet<>();
+        initISet.add("S' -> · S");
+        Set<Set<String>> c = new HashSet<>();
+        c.add(closure(initISet));
+
+        // build c
+        boolean added = true;
+        while(added){
+            added = false;
+            for(Set<String> itemSet : c){
+                for(String gramSymb : grammar.getTerminals()){
+                    Set<String> gotoResult = calcGoto(itemSet, gramSymb);
+                    if(gotoResult == null || c.contains(gotoResult)) continue;  // goto is empty or goto in c
+                    c.add(gotoResult);
+                    added = true;
+                }
+            }
+        }
+
+        return c;
     }
 
     public static void main(String[] args) throws IOException {
