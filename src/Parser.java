@@ -25,6 +25,11 @@ public class Parser {
         String getBody() {
             return body;
         }
+
+        @Override
+        public String toString() {
+            return head + " -> " + body;
+        }
     }
 
     // using String to repr items atm
@@ -118,21 +123,30 @@ public class Parser {
     }
 
     private Grammar grammar;
+    private Map<Set<String>, Map<String, Set<String>>> gotoTable;
 
     public Parser(File gramSpecification) throws IOException {
         this.grammar = new Grammar(gramSpecification);
     }
 
-    private Set<String> closure(Set<String> itemArg) {
-        Set<String> j = new HashSet<>(itemArg);
+
+    /**
+     * Calculates closure of the given set of items
+     *
+     * @param itemSet set of items
+     * @return set of items forming the closure of the given set of items itemSet
+     */
+    private Set<String> closure(Set<String> itemSet) {
+        Set<String> j = new HashSet<>(itemSet);
         boolean itemAddedFlag = true; // true if an item added to j
-        HashMap<String, Boolean> added = new HashMap<>();
+        HashMap<String, Boolean> added = new HashMap<>();  // indicates if item (key) has been added to J
 
         while (itemAddedFlag) {
             itemAddedFlag = false;
 
+            // "for each item A -> α · B β in j"
             for (String item : j) {
-                String afterDot = item.split("·")[1];
+                String afterDot = item.split("\\s·\\s")[1];
                 String element = afterDot.split("\\s")[0]; // get 1st element after dot (bc elements in items & prod separated by space)
                 // check it's a non-term
                 if (!grammar.getNonterminals().contains(element)){
@@ -140,9 +154,10 @@ public class Parser {
                 }
                 Set<String> bodies = grammar.getProductionsMap().get(element);  // get all prod bodies for nonterm after dot in item
 
+                // "for each prod B -> γ of grammar"
                 for (String body : bodies) {
-                    String itemToAdd = element + " -> · " + body;
-                    if (!added.get(element)) {
+                    String itemToAdd = element + " -> · " + body;  // item B -> · γ
+                    if (!added.get(element)) {  // if B -> · γ not in j
                         j.add(itemToAdd);
                         added.put(element, true);
                         itemAddedFlag = true;
@@ -151,6 +166,41 @@ public class Parser {
             }
         }
         return j;
+    }
+
+
+    /**
+     * Calculates & returns the value of GOTO(itemSet, gramSymb).
+     * Gets value from gotoTable if previously calculated; otherwise, calculates it & stores it too.
+     *
+     * @param itemSet set of items
+     * @return set of items forming the closure of the given set of items itemSet
+     */
+    private Set<String> calcGoto(Set<String> itemSet, String gramSymb){
+        // check if already calc & stored in gotoTable
+        if(gotoTable.get(itemSet).containsKey(gramSymb)){
+            return gotoTable.get(itemSet).get(gramSymb);
+        }
+
+        // if not in gotoTable, calculate it
+        Set<String> itemSetForClosure = new HashSet<>();
+
+        // "for each item A -> α · gramSymb β in itemSet"
+        for(String item : itemSet){
+
+            // check if item has · directly to the left of gramSymb
+            String[] splitAtDot = item.split("\\s·\\s");
+            if(!gramSymb.equals(splitAtDot[1].split("\\s")[0])){
+                continue;
+            }
+            // add item A -> α gramSymb · β to set
+            itemSetForClosure.add(splitAtDot[0] + " " + gramSymb + " · " + splitAtDot[1]);
+        }
+        // calc closure of set of all items A -> α gramSymb · β
+        Set<String> result = closure(itemSetForClosure);
+        gotoTable.get(itemSet).put(gramSymb, result);  // store result in gotoTable
+
+        return result;
     }
 
     public static void main(String[] args) throws IOException {
