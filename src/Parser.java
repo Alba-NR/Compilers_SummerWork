@@ -108,41 +108,42 @@ public class Parser {
          * @param addNonterm new, additiona non-terminals
          * @param addTerm new, additional terminals
          * @param addProd new, additional productions
+         * @param newStartSymb specifies new start symb
          */
-        Grammar(Grammar grammar, Set<String> addNonterm, Set<String> addTerm, Set<Production> addProd){
+        Grammar(Grammar grammar, Set<String> addNonterm, Set<String> addTerm, Set<Production> addProd, String newStartSymb){
             nonterminals = new HashSet<>(grammar.getNonterminals());
-            nonterminals.addAll(addNonterm);
+            if(addNonterm != null) nonterminals.addAll(addNonterm);
 
             terminals = new HashSet<>(grammar.getTerminals());
-            terminals.addAll(addTerm);
+            if(addTerm != null) terminals.addAll(addTerm);
 
             productionsSet = new HashSet<>(grammar.getProductionsSet());
-            productionsSet.addAll(addProd);
-
             productionsMap = new HashMap<>(grammar.getProductionsMap());
-            for(Production newProd : addProd){
-                Set<String> bodies = productionsMap.getOrDefault(newProd.getHead(), new HashSet<>());
-                bodies.add(newProd.body);
-                productionsMap.put(newProd.getHead(), bodies);
+            if(addProd != null) {
+                productionsSet.addAll(addProd);
+                for (Production newProd : addProd) {
+                    Set<String> bodies = productionsMap.getOrDefault(newProd.getHead(), new HashSet<>());
+                    bodies.add(newProd.body);
+                    productionsMap.put(newProd.getHead(), bodies);
+                }
             }
+
+            if(newStartSymb != null) startSymbol = newStartSymb;
+            else startSymbol = grammar.startSymbol;
         }
 
         Set<Production> getProductionsSet() {
             return new HashSet<>(productionsSet);
         }
-
         Map<String, Set<String>> getProductionsMap() {
             return new HashMap<>(productionsMap);
         }
-
         Set<String> getNonterminals() {
             return new HashSet<>(nonterminals);
         }
-
         Set<String> getTerminals() {
             return new HashSet<>(terminals);
         }
-
         public String getStartSymbol() {
             return startSymbol;
         }
@@ -175,9 +176,7 @@ public class Parser {
                 String afterDot = item.split("\\s·\\s")[1];
                 String element = afterDot.split("\\s")[0]; // get 1st element after dot (bc elements in items & prod separated by space)
                 // check it's a non-term
-                if (!grammar.getNonterminals().contains(element)){
-                    continue;
-                }
+                if (!grammar.getNonterminals().contains(element)) continue;
                 Set<String> bodies = grammar.getProductionsMap().get(element);  // get all prod bodies for nonterm after dot in item
 
                 // "for each prod B -> γ of grammar"
@@ -204,9 +203,8 @@ public class Parser {
      */
     private Set<String> calcGoto(Set<String> itemSet, String gramSymb){
         // check if already calc & stored in gotoTable
-        if(gotoTable.get(itemSet).containsKey(gramSymb)){
-            return gotoTable.get(itemSet).get(gramSymb);
-        }
+        if(gotoTable.get(itemSet).containsKey(gramSymb)) return gotoTable.get(itemSet).get(gramSymb);
+
 
         // if not in gotoTable, calculate it
         Set<String> itemSetForClosure = new HashSet<>();
@@ -216,9 +214,8 @@ public class Parser {
 
             // check if item has · directly to the left of gramSymb
             String[] splitAtDot = item.split("\\s·\\s");
-            if(!gramSymb.equals(splitAtDot[1].split("\\s")[0])){
-                continue;
-            }
+            if(!gramSymb.equals(splitAtDot[1].split("\\s")[0])) continue;
+
             // add item A -> α gramSymb · β to set
             itemSetForClosure.add(splitAtDot[0] + " " + gramSymb + " · " + splitAtDot[1]);
         }
@@ -229,6 +226,16 @@ public class Parser {
         return result;
     }
 
+    private Set<String> calcCanonicalCollection(){
+        Set<String> newNonterm = new HashSet<>();
+        newNonterm.add("S'");
+        Set<Production> newProd = new HashSet<>();
+        newProd.add(new Production("S'", "S"));
+
+        Grammar augmGram = new Grammar(grammar, newNonterm, null, newProd, "S'");
+
+        return new HashSet<>(); // just to compile, must change
+    }
 
     public static void main(String[] args) throws IOException {
         try {
