@@ -53,6 +53,7 @@ public class Parser {
         private Set<String> nonterminals;
         private Set<String> terminals;
         private String startSymbol;
+        private Map<String, Set<String>> followTable = new HashMap<String, Set<String>>(); // stores follow(A) for non-term A (note: lazy calc)
 
         /**
          * Create Grammar object from grammar specification in given file.
@@ -93,6 +94,11 @@ public class Parser {
                         nextLine = reader.readLine();  // read next line
                     }
 
+                    // put input right endmarker into follow(start symbol)
+                    Set<String> followStartSymb = new HashSet<>();
+                    followStartSymb.add("$");
+                    followTable.put(startSymbol, followStartSymb);
+
                 } catch (NullPointerException e) {
                     System.out.println("Incorrect format of input file.");
                 }
@@ -130,6 +136,11 @@ public class Parser {
 
             if(newStartSymb != null) startSymbol = newStartSymb;
             else startSymbol = grammar.startSymbol;
+
+            // put input right endmarker into follow(start symbol)
+            Set<String> followStartSymb = new HashSet<>();
+            followStartSymb.add("$");
+            followTable.put(startSymbol, followStartSymb);
         }
 
         Set<Production> getProductionsSet() {
@@ -147,13 +158,75 @@ public class Parser {
         public String getStartSymbol() {
             return startSymbol;
         }
+
+        /**
+         * Calculates the set of terminals that can appear immediately to the right of
+         * nonterm (the param) in some sentential form.
+         * @param nonterm nonterminal for which to calculate set of terminals
+         */
+        public Set<String> calcFollow(String nonterm){
+            // check if already calc & stored in followTable
+            if(followTable.containsKey(nonterm)) return followTable.get(nonterm);
+            // else calc it
+            Set<String> followSet = new HashSet<>();
+
+            for(Production prod : productionsSet){
+                List<String> elementsInBody = Arrays.asList(prod.getBody().split("\\s"));
+                // only check productions which contain nonterm in their body
+                if (!elementsInBody.contains(nonterm)) continue;
+
+                // get string of elements after nonterm in the body of this prod
+                StringBuilder strAfterElement = new StringBuilder();
+                for(String s : elementsInBody.subList(elementsInBody.indexOf(nonterm), elementsInBody.size()-1)){
+                    strAfterElement.append(s);
+                }
+                // case/step 1) in follow calc algorithm
+                followSet.addAll(calcFirstForString(strAfterElement.toString()));
+                // case/step 2) in follow calc algorithm
+                if(strAfterElement.toString().equals("") || calcFirstForString(strAfterElement.toString()).contains("ε")){
+                    followSet.addAll(
+                            calcFollow(prod.getHead())
+                    );
+                }
+            }
+            return followSet;
+        }
+
+        /**
+         * Calculates set of items that begin a string derived from the
+         * given grammar symbol, gramSymb
+         * @param gramSymb grammar symbol for which to calculate set
+         */
+        private Set<String> calcFirstForGramSymb(String gramSymb){
+            return new HashSet<>();  // STUB, to compile only
+        }
+
+        /**
+         * Calculates set of items that begin a string derived from the
+         * given string, strToCalc
+         * @param strToCalc grammar symbol for which to calculate set
+         */
+        private Set<String> calcFirstForString(String strToCalc){
+            return new HashSet<>();  // STUB, to compile only
+        }
     }
 
     private Grammar grammar;
-    private Map<Set<String>, Map<String, Set<String>>> gotoTable;
+    private Grammar augmentedGrammar;
+    private Map<Set<String>, Map<String, Set<String>>> gotoTable = new HashMap<Set<String>, Map<String, Set<String>>>();
+    private Map<Set<String>, Map<String, Set<String>>> SLRgotoTable;
+    private Map<Set<String>, Map<String, Set<String>>> SLRactionTable;
 
     public Parser(File gramSpecification) throws IOException {
-        this.grammar = new Grammar(gramSpecification);
+        grammar = new Grammar(gramSpecification);
+
+        // create augmented grammar
+        Set<String> newNonterm = new HashSet<>();
+        newNonterm.add("S'");
+        Set<Production> newProd = new HashSet<>();
+        newProd.add(new Production("S'", "S"));
+
+        augmentedGrammar = new Grammar(grammar, newNonterm, null, newProd, "S'");
     }
 
 
@@ -231,14 +304,6 @@ public class Parser {
      * @return canonical collection of items
      */
     private Set<Set<String>> calcCanonicalCollection(){
-        // create augmented grammar
-        Set<String> newNonterm = new HashSet<>();
-        newNonterm.add("S'");
-        Set<Production> newProd = new HashSet<>();
-        newProd.add(new Production("S'", "S"));
-
-        Grammar augmGram = new Grammar(grammar, newNonterm, null, newProd, "S'");
-
         // init c (canonical collection)
         Set<String> initISet = new HashSet<>();
         initISet.add("S' -> · S");
@@ -260,6 +325,13 @@ public class Parser {
         }
 
         return c;
+    }
+
+    /**
+     * Construct the action & goto tables for the SLR parsing table.
+     * (stored as fields)
+     */
+    private void constructSLRparsingTable(){
     }
 
     public static void main(String[] args) throws IOException {
