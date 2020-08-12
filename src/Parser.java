@@ -231,11 +231,29 @@ public class Parser {
 
         /**
          * Calculates set of items that begin a string derived from the
-         * given string, strToCalc
-         * @param strToCalc grammar symbol for which to calculate set
+         * given string, strToCalc. That is, FIRST(strToCalc)
+         * @param strToCalc grammar symbol for which to calculate FIRST set
          */
         private Set<String> calcFirstForString(String strToCalc){
-            return new HashSet<>();  // STUB, to compile only
+            Set<String> result = new HashSet<>();
+            String[] elements = strToCalc.split("\\s"); // get the elements of the str (Xi) (str is X1 X2 ... Xk)
+
+            boolean allElReducedToEmpty = true;
+
+            for(String element : elements){
+                Set<String> firstSetForElement = calcFirstForGramSymb(element);
+                result.addAll(firstSetForElement);
+                // only continue to next element if this one can be reduced to ε
+                if(!firstSetForElement.contains("ε")){
+                    allElReducedToEmpty = false;
+                    break;
+                }
+            }
+
+            // ε in FIRST(strToCalc) only if all elements can be reduced to ε
+            if(!allElReducedToEmpty) result.remove("ε");
+
+            return result;
         }
     }
 
