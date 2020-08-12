@@ -194,11 +194,39 @@ public class Parser {
 
         /**
          * Calculates set of items that begin a string derived from the
-         * given grammar symbol, gramSymb
-         * @param gramSymb grammar symbol for which to calculate set
+         * given grammar symbol, gramSymb. That is, FIRST(gramSymb)
+         * @param gramSymb grammar symbol for which to calculate FIRST set
          */
         private Set<String> calcFirstForGramSymb(String gramSymb){
-            return new HashSet<>();  // STUB, to compile only
+            Set<String> result = new HashSet<>();
+            if(gramSymb.equals("ε")) result.add("ε");
+            else if(terminals.contains(gramSymb)) result.add(gramSymb); // if terminal, then first(gramSymb) = {gramSymb}
+            else{
+                // calc first(gramSymb) set for gramSymb a non-terminal
+                Set<String> bodies = productionsMap.get(gramSymb);
+
+                for(String body : bodies){
+                    // prod gramSymb —> Y1 Y2 ... Yk, a in FIRST(gramSymb) if:
+                    // for some i, a in FIRST(Yi) & ε in all of FIRST(Y1),..., FIRST(Yi-1);
+
+                    String[] elements = body.split("\\s"); // get the elements (Yi)
+                    boolean allElReducedToEmpty = true;
+
+                    for(String element : elements){
+                        Set<String> firstSetForElement = calcFirstForGramSymb(element);
+                        result.addAll(firstSetForElement);
+                        // only continue to next element if this one can be reduced to ε
+                        if(!firstSetForElement.contains("ε")){
+                            allElReducedToEmpty = false;
+                            break;
+                        }
+                    }
+
+                    // ε in FIRST(gramSymb) only if all elements can be reduced to ε
+                    if(!allElReducedToEmpty) result.remove("ε");
+                }
+            }
+            return result;
         }
 
         /**
