@@ -1,0 +1,10 @@
+stmt,N,F,sign,E,S,factor,T
+INT,.,PLUS,MINUS,MULT,COS,FACTORIAL
+stmt -> N | E
+N -> F | INT
+F -> sign INT . INT
+sign -> MINUS | ε
+E -> E PLUS S | E MINUS S | S
+S -> factor MULT S | factor
+factor -> COS factor | T
+T -> INT FACTORIAL | N

@@ -286,8 +286,8 @@ public class Parser {
 
     private Grammar grammar;
     private Grammar augmentedGrammar;
-    private Map<Set<String>, Map<String, Set<String>>> gotoTable = new HashMap<Set<String>, Map<String, Set<String>>>();
-    private Map<Set<String>, Map<String, Set<String>>> SLRgotoTable;
+    private Map<Set<String>, Map<String, Set<String>>> gotoTable = new HashMap<>();
+    private Map<Integer, Map<String, Integer>> SLRgotoTable;
     private Map<Integer, Map<String, ParserAction>> SLRactionTable;
     private List<Set<String>> mapIntStToSetOfItems;
     private Integer startState;
@@ -347,16 +347,14 @@ public class Parser {
      * @param itemSet set of items
      * @return set of items forming the closure of the given set of items itemSet
      */
-    private Set<String> calcGoto(Set<String> itemSet, String gramSymb, boolean useSLRtable){
-        Map<Set<String>, Map<String, Set<String>>> tableToUse;
-        if(useSLRtable) tableToUse = SLRgotoTable;
-        else tableToUse = gotoTable;
+    private Set<String> calcGoto(Set<String> itemSet, String gramSymb){
 
         // check if already calc & stored in gotoTable
-        if(tableToUse.get(itemSet).containsKey(gramSymb)) return tableToUse.get(itemSet).get(gramSymb);
-
+        if(gotoTable.containsKey(itemSet)) if (gotoTable.get(itemSet).containsKey(gramSymb)) return gotoTable.get(itemSet).get(gramSymb);
 
         // if not in gotoTable, calculate it
+        Map<String, Set<String>> newEntry = new HashMap<>(); // in case no entry for this itemSet is yet present in table
+
         Set<String> itemSetForClosure = new HashSet<>();
 
         // "for each item A -> α · gramSymb β in itemSet"
@@ -371,7 +369,11 @@ public class Parser {
         }
         // calc closure of set of all items A -> α gramSymb · β
         Set<String> result = closure(itemSetForClosure);
-        tableToUse.get(itemSet).put(gramSymb, result);  // store result in gotoTable
+        if(gotoTable.containsKey(itemSet)) gotoTable.get(itemSet).put(gramSymb, result);  // store result in gotoTable
+        else{
+            newEntry.put(gramSymb, result);
+            gotoTable.put(itemSet, newEntry);
+        }
 
         return result;
     }
@@ -394,7 +396,7 @@ public class Parser {
             added = false;
             for(Set<String> itemSet : c){
                 for(String gramSymb : grammar.getTerminals()){
-                    Set<String> gotoResult = calcGoto(itemSet, gramSymb, false);
+                    Set<String> gotoResult = calcGoto(itemSet, gramSymb);
                     if(gotoResult == null || c.contains(gotoResult)) continue;  // goto is empty or goto in c
                     c.add(gotoResult);
                     added = true;
@@ -412,7 +414,6 @@ public class Parser {
     private void constructSLRparsingTable(){
         Set<Set<String>> canonCollection = calcCanonicalCollection();
         mapIntStToSetOfItems = new ArrayList<>(canonCollection.size()); // map of int states to corresponding set of items
-        SLRgotoTable = gotoTable; // must check !
         int c = 0;
 
         // build states & determine their parsing actions
@@ -440,9 +441,10 @@ public class Parser {
                     }
                 }
                 else{
+                    // case a)
                     // shift actions
                     String terminalA = elements[Arrays.asList(elements).indexOf("·") + 1];
-                    Set<String> setItemsJ = gotoTable.get(itemSet).get(terminalA);
+                    Set<String> setItemsJ = calcGoto(itemSet, terminalA);
                     if(setItemsJ != null) thisSetSLRActionTableEntry.put(terminalA, new ShiftAction(mapIntStToSetOfItems.indexOf(setItemsJ)));
                 }
             }
@@ -450,26 +452,57 @@ public class Parser {
             SLRactionTable.put(c, thisSetSLRActionTableEntry);  // put entry in SLR action table
             c++;
         }
+
+        // construct SLRgotoTable from existent entries in gotoTable
+        for(Map.Entry<Set<String>, Map<String, Set<String>>> entryOuter : gotoTable.entrySet()){
+            Map<String, Integer> newValueOuter = new HashMap<>();
+            for(Map.Entry<String, Set<String>> entryInner : entryOuter.getValue().entrySet()){
+                newValueOuter.put(entryInner.getKey(), mapIntStToSetOfItems.indexOf(entryInner.getValue()));
+            }
+            SLRgotoTable.put(mapIntStToSetOfItems.indexOf(entryOuter.getKey()), newValueOuter);
+        }
+
+
         // starting state is one constructed from set of items containing [S' -> S]
         Set<String> startStateItemSet = new HashSet<>();
         startStateItemSet.add(augmentedGrammar.getStartSymbol() + " -> · " + grammar.getStartSymbol());
         this.startState = mapIntStToSetOfItems.indexOf(startStateItemSet);
     }
 
+    private Integer calcSLRGoto(Integer state, String gramSymb){
+
+        // check if already calc & stored in SLRgotoTable
+        if(SLRgotoTable.containsKey(state)) if (SLRgotoTable.get(state).containsKey(gramSymb)) return SLRgotoTable.get(state).get(gramSymb);
+
+        // if not in SLRgotoTable, calculate it by calling calcGoto
+        Map<String, Integer> newEntry = new HashMap<>(); // in case no entry for this itemSet is yet present in table
+
+        Integer result = mapIntStToSetOfItems.indexOf(calcGoto(mapIntStToSetOfItems.get(state), gramSymb));
+
+        if(SLRgotoTable.containsKey(state)) SLRgotoTable.get(state).put(gramSymb, result);  // store result in gotoTable
+        else{
+            newEntry.put(gramSymb, result);
+            SLRgotoTable.put(state, newEntry);
+        }
+
+        return result;
+    }
+
     /**
      * LR parsing program
+     * must call constructSLRparsing table before
      */
     void parse(List<Token> inputStr) throws ParsingError {
         Stack<Integer> stack = new Stack<>();  // create parsing stack
         stack.push(startState);  // initially, starting state is on stack
-        inputStr.add(new Token<String>(TokenName.INPUTENDMARKER, "$"));  // add input endmarker to input str
+        inputStr.add(new Token<>(TokenName.INPUTENDMARKER, "$"));  // add input endmarker to input str
 
         Iterator<Token> iterator = inputStr.iterator(); // to iterate through input in seq
         Token nextToken = iterator.next(); // get 1st input symbol
 
         while(true){
             Integer topState = stack.peek();
-            ParserAction action = SLRactionTable.get(topState).getOrDefault(nextToken.getName(), new ErrorAction());  // NOT SURE -- MUST MODIFY
+            ParserAction action = SLRactionTable.get(topState).getOrDefault(nextToken.getStrName(), new ErrorAction());  // NOT SURE -- MUST MODIFY
 
             if(action instanceof ShiftAction){
                 stack.push(((ShiftAction) action).stateToShift);
@@ -480,7 +513,7 @@ public class Parser {
                 for(int i = 0; i < prod.getBody().length(); i++){
                     stack.pop();
                 }
-                stack.push(mapIntStToSetOfItems.indexOf(SLRgotoTable.get(stack.peek()).get(prod.getHead())));
+                stack.push(mapIntStToSetOfItems.indexOf(calcSLRGoto(stack.peek(), prod.getHead())));
 
             }else if(action instanceof AcceptAction) break;
             else throw new ParsingError(stack);

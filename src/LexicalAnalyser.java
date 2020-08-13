@@ -24,17 +24,13 @@ public class LexicalAnalyser {
             while (peekInt != -1) {
                 isNum = false;
 
-                // operators
-                if (peek == '+' || peek == '-' || peek == '*' || peek == '!') {
-                    Token<String> token = new Token<>(TokenName.OP, String.valueOf(peek));
-                    result.add(token);
                 // cos operator
-                } else if (peek == 'c') {
+                if (peek == 'c') {
                     peek = (char) reader.read();
                     if (peek == 'o') {
                         peek = (char) reader.read();
                         if (peek == 's') {
-                            Token<String> token = new Token<>(TokenName.OP, "cos");
+                            Token<String> token = new Token<>(TokenName.COS, "cos");
                             result.add(token);
                         } else {
                             throw new InvalidCharException(peek);
@@ -72,7 +68,24 @@ public class LexicalAnalyser {
                     isNum = true;
 
                 } else {
-                    throw new InvalidCharException(peek);
+                    // operators
+                    Token<String> token = null;
+                    switch (peek){
+                        case '+':
+                            token = new Token<>(TokenName.PLUS, String.valueOf(peek));
+                            break;
+                        case '-':
+                            token = new Token<>(TokenName.MINUS, String.valueOf(peek));
+                            break;
+                        case '*':
+                            token = new Token<>(TokenName.MULT, String.valueOf(peek));
+                            break;
+                        case '!':
+                            token = new Token<>(TokenName.FACTORIAL, String.valueOf(peek));
+                            break;
+                    }
+                    if(token != null) result.add(token);
+                    else throw new InvalidCharException(peek);
                 }
 
                 // update peek values for next iteration ONLY if token WAS NOT a num (bc they're already updated if num)

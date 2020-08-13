@@ -2,6 +2,10 @@
 public enum TokenName {
     FLOAT,
     INT,
-    OP,
+    COS,
+    PLUS,
+    MINUS,
+    MULT,
+    FACTORIAL,
     INPUTENDMARKER
 }

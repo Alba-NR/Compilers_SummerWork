@@ -16,6 +16,10 @@ public class Token<T> {
         return this.name;
     }
 
+    public String getStrName() {
+        return "" + this.name;
+    }
+
     public T getValue(){
         return this.value;
     }
