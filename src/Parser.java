@@ -2,6 +2,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.util.*;
 
 public class Parser {
@@ -31,21 +32,6 @@ public class Parser {
             return head + " -> " + body;
         }
     }
-
-    // using String to repr items atm
-    /*class Item{
-        Class representing an item for the grammar
-        String head;
-        String body;
-        int dotPosInBody;
-
-        Item(Production prod, int dotPos){
-            this.head = prod.getHead();
-            this.body = prod.getBody();
-            dotPosInBody = dotPos;
-        }
-    }
-    */
 
     class Grammar {
         private Set<Production> productionsSet; // note: dif prod bodies for same nonterm stored as separate elements in set
@@ -164,7 +150,7 @@ public class Parser {
          * nonterm (the param) in some sentential form.
          * @param nonterm nonterminal for which to calculate set of terminals
          */
-        public Set<String> calcFollow(String nonterm){
+        Set<String> calcFollow(String nonterm){
             // check if already calc & stored in followTable
             if(followTable.containsKey(nonterm)) return followTable.get(nonterm);
             // else calc it
@@ -257,11 +243,54 @@ public class Parser {
         }
     }
 
+    interface ParserAction {
+        String toString();
+    }
+    class Shift implements ParserAction{
+        Integer stateToShift;
+        Shift(Integer stateToShift) {
+            this.stateToShift = stateToShift;
+        }
+
+        @Override
+        public String toString() {
+            return "shift " + stateToShift;
+        }
+    }
+    class Reduce implements ParserAction{
+        Production prodToReduceBy;
+        Reduce(Production prodToReduceBy){
+            this.prodToReduceBy = prodToReduceBy;
+        }
+
+        @Override
+        public String toString() {
+            return "reduce " + prodToReduceBy;
+        }
+    }
+    class Accept implements ParserAction{
+        Accept(){}
+
+        @Override
+        public String toString() {
+            return "accept";
+        }
+    }
+    class Error implements ParserAction{
+        Error(){}
+
+        @Override
+        public String toString() {
+            return "error";
+        }
+    }
+
     private Grammar grammar;
     private Grammar augmentedGrammar;
     private Map<Set<String>, Map<String, Set<String>>> gotoTable = new HashMap<Set<String>, Map<String, Set<String>>>();
     private Map<Set<String>, Map<String, Set<String>>> SLRgotoTable;
-    private Map<Set<String>, Map<String, Set<String>>> SLRactionTable;
+    private Map<Integer, Map<String, ParserAction>> SLRactionTable;
+    private List<Set<String>> mapIntStToSetOfItems;
 
     public Parser(File gramSpecification) throws IOException {
         grammar = new Grammar(gramSpecification);
@@ -274,7 +303,6 @@ public class Parser {
 
         augmentedGrammar = new Grammar(grammar, newNonterm, null, newProd, "S'");
     }
-
 
     /**
      * Calculates closure of the given set of items
@@ -312,7 +340,6 @@ public class Parser {
         return j;
     }
 
-
     /**
      * Calculates & returns the value of GOTO(itemSet, gramSymb).
      * Gets value from gotoTable if previously calculated; otherwise, calculates it & stores it too.
@@ -320,9 +347,13 @@ public class Parser {
      * @param itemSet set of items
      * @return set of items forming the closure of the given set of items itemSet
      */
-    private Set<String> calcGoto(Set<String> itemSet, String gramSymb){
+    private Set<String> calcGoto(Set<String> itemSet, String gramSymb, boolean useSLRtable){
+        Map<Set<String>, Map<String, Set<String>>> tableToUse;
+        if(useSLRtable) tableToUse = SLRgotoTable;
+        else tableToUse = gotoTable;
+
         // check if already calc & stored in gotoTable
-        if(gotoTable.get(itemSet).containsKey(gramSymb)) return gotoTable.get(itemSet).get(gramSymb);
+        if(tableToUse.get(itemSet).containsKey(gramSymb)) return tableToUse.get(itemSet).get(gramSymb);
 
 
         // if not in gotoTable, calculate it
@@ -340,19 +371,20 @@ public class Parser {
         }
         // calc closure of set of all items A -> α gramSymb · β
         Set<String> result = closure(itemSetForClosure);
-        gotoTable.get(itemSet).put(gramSymb, result);  // store result in gotoTable
+        tableToUse.get(itemSet).put(gramSymb, result);  // store result in gotoTable
 
         return result;
     }
 
     /**
-     * Calculate & return the canonical collection of sets of LR(0) items for the grammar at hand.
+     * Calculate & return the canonical collection of sets of LR(0) items for the augmented
+     * grammar G'
      * @return canonical collection of items
      */
     private Set<Set<String>> calcCanonicalCollection(){
         // init c (canonical collection)
         Set<String> initISet = new HashSet<>();
-        initISet.add("S' -> · S");
+        initISet.add(augmentedGrammar.getStartSymbol() + " -> · " + grammar.getStartSymbol());
         Set<Set<String>> c = new HashSet<>();
         c.add(closure(initISet));
 
@@ -362,7 +394,7 @@ public class Parser {
             added = false;
             for(Set<String> itemSet : c){
                 for(String gramSymb : grammar.getTerminals()){
-                    Set<String> gotoResult = calcGoto(itemSet, gramSymb);
+                    Set<String> gotoResult = calcGoto(itemSet, gramSymb, false);
                     if(gotoResult == null || c.contains(gotoResult)) continue;  // goto is empty or goto in c
                     c.add(gotoResult);
                     added = true;
@@ -378,6 +410,42 @@ public class Parser {
      * (stored as fields)
      */
     private void constructSLRparsingTable(){
+        Set<Set<String>> canonCollection = calcCanonicalCollection();
+        mapIntStToSetOfItems = new ArrayList<>(canonCollection.size()); // map of int states to corresponding set of items
+        SLRgotoTable = gotoTable; // must check !
+
+        // build states & determine their parsing actions
+        for(Set<String> itemSet : canonCollection){
+            mapIntStToSetOfItems.add(itemSet); // include this set in the map int (i.e. repr by index) to Set of items (Strings)
+            Map<String, ParserAction> thisSetSLRActionTableEntry = new HashMap<>();  // init action table entry for current state
+
+            for(String item : itemSet){
+                String[] elements = item.split("\\s");
+                // case c)
+                if(item.equals(augmentedGrammar.getStartSymbol() + " -> " + grammar.getStartSymbol() + " ·")){
+                    thisSetSLRActionTableEntry.put("$", new Accept());
+                }
+                // case b)
+                else if(elements[elements.length - 1].equals("·")){
+                    // find string alpha (using StringBuilder...)
+                    StringBuilder alpha = new StringBuilder();
+                    for(int i = 2; i < elements.length - 1; i++){
+                        if(i != elements.length - 2) alpha.append(elements[i]).append(" ");
+                        else alpha.append(elements[i]);
+                    }
+                    // set the reduce actions
+                    for(String term : augmentedGrammar.calcFollow(elements[0])){
+                        thisSetSLRActionTableEntry.put(term, new Reduce(new Production(elements[0], alpha.toString())));
+                    }
+                }
+                else{
+                    // shift actions
+                    String terminalA = elements[Arrays.asList(elements).indexOf("·") + 1];
+                    Set<String> setItemsJ = gotoTable.get(itemSet).get(terminalA);
+                    if(setItemsJ != null) thisSetSLRActionTableEntry.put(terminalA, new Shift(mapIntStToSetOfItems.indexOf(setItemsJ)));
+                }
+            }
+        }
     }
 
     public static void main(String[] args) throws IOException {
