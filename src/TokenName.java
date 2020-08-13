@@ -2,5 +2,6 @@
 public enum TokenName {
     FLOAT,
     INT,
-    OP
+    OP,
+    INPUTENDMARKER
 }

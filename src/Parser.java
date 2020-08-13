@@ -2,7 +2,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.lang.reflect.Array;
 import java.util.*;
 
 public class Parser {
@@ -246,9 +245,9 @@ public class Parser {
     interface ParserAction {
         String toString();
     }
-    class Shift implements ParserAction{
+    class ShiftAction implements ParserAction{
         Integer stateToShift;
-        Shift(Integer stateToShift) {
+        ShiftAction(Integer stateToShift) {
             this.stateToShift = stateToShift;
         }
 
@@ -257,9 +256,9 @@ public class Parser {
             return "shift " + stateToShift;
         }
     }
-    class Reduce implements ParserAction{
+    class ReduceAction implements ParserAction{
         Production prodToReduceBy;
-        Reduce(Production prodToReduceBy){
+        ReduceAction(Production prodToReduceBy){
             this.prodToReduceBy = prodToReduceBy;
         }
 
@@ -268,16 +267,16 @@ public class Parser {
             return "reduce " + prodToReduceBy;
         }
     }
-    class Accept implements ParserAction{
-        Accept(){}
+    class AcceptAction implements ParserAction{
+        AcceptAction(){}
 
         @Override
         public String toString() {
             return "accept";
         }
     }
-    class Error implements ParserAction{
-        Error(){}
+    class ErrorAction implements ParserAction{
+        ErrorAction(){}
 
         @Override
         public String toString() {
@@ -291,6 +290,7 @@ public class Parser {
     private Map<Set<String>, Map<String, Set<String>>> SLRgotoTable;
     private Map<Integer, Map<String, ParserAction>> SLRactionTable;
     private List<Set<String>> mapIntStToSetOfItems;
+    private Integer startState;
 
     public Parser(File gramSpecification) throws IOException {
         grammar = new Grammar(gramSpecification);
@@ -413,6 +413,7 @@ public class Parser {
         Set<Set<String>> canonCollection = calcCanonicalCollection();
         mapIntStToSetOfItems = new ArrayList<>(canonCollection.size()); // map of int states to corresponding set of items
         SLRgotoTable = gotoTable; // must check !
+        int c = 0;
 
         // build states & determine their parsing actions
         for(Set<String> itemSet : canonCollection){
@@ -423,7 +424,7 @@ public class Parser {
                 String[] elements = item.split("\\s");
                 // case c)
                 if(item.equals(augmentedGrammar.getStartSymbol() + " -> " + grammar.getStartSymbol() + " ·")){
-                    thisSetSLRActionTableEntry.put("$", new Accept());
+                    thisSetSLRActionTableEntry.put("$", new AcceptAction());
                 }
                 // case b)
                 else if(elements[elements.length - 1].equals("·")){
@@ -435,16 +436,54 @@ public class Parser {
                     }
                     // set the reduce actions
                     for(String term : augmentedGrammar.calcFollow(elements[0])){
-                        thisSetSLRActionTableEntry.put(term, new Reduce(new Production(elements[0], alpha.toString())));
+                        thisSetSLRActionTableEntry.put(term, new ReduceAction(new Production(elements[0], alpha.toString())));
                     }
                 }
                 else{
                     // shift actions
                     String terminalA = elements[Arrays.asList(elements).indexOf("·") + 1];
                     Set<String> setItemsJ = gotoTable.get(itemSet).get(terminalA);
-                    if(setItemsJ != null) thisSetSLRActionTableEntry.put(terminalA, new Shift(mapIntStToSetOfItems.indexOf(setItemsJ)));
+                    if(setItemsJ != null) thisSetSLRActionTableEntry.put(terminalA, new ShiftAction(mapIntStToSetOfItems.indexOf(setItemsJ)));
                 }
             }
+
+            SLRactionTable.put(c, thisSetSLRActionTableEntry);  // put entry in SLR action table
+            c++;
+        }
+        // starting state is one constructed from set of items containing [S' -> S]
+        Set<String> startStateItemSet = new HashSet<>();
+        startStateItemSet.add(augmentedGrammar.getStartSymbol() + " -> · " + grammar.getStartSymbol());
+        this.startState = mapIntStToSetOfItems.indexOf(startStateItemSet);
+    }
+
+    /**
+     * LR parsing program
+     */
+    void parse(List<Token> inputStr) throws ParsingError {
+        Stack<Integer> stack = new Stack<>();  // create parsing stack
+        stack.push(startState);  // initially, starting state is on stack
+        inputStr.add(new Token<String>(TokenName.INPUTENDMARKER, "$"));  // add input endmarker to input str
+
+        Iterator<Token> iterator = inputStr.iterator(); // to iterate through input in seq
+        Token nextToken = iterator.next(); // get 1st input symbol
+
+        while(true){
+            Integer topState = stack.peek();
+            ParserAction action = SLRactionTable.get(topState).getOrDefault(nextToken.getName(), new ErrorAction());  // NOT SURE -- MUST MODIFY
+
+            if(action instanceof ShiftAction){
+                stack.push(((ShiftAction) action).stateToShift);
+                nextToken = iterator.next();
+
+            }else if(action instanceof ReduceAction){
+                Production prod = ((ReduceAction) action).prodToReduceBy;
+                for(int i = 0; i < prod.getBody().length(); i++){
+                    stack.pop();
+                }
+                stack.push(mapIntStToSetOfItems.indexOf(SLRgotoTable.get(stack.peek()).get(prod.getHead())));
+
+            }else if(action instanceof AcceptAction) break;
+            else throw new ParsingError(stack);
         }
     }
 
