@@ -37,6 +37,7 @@ public class Parser {
         private Map<String, Set<String>> productionsMap;  // stores prod bodies assoc w/each nonterm (--head)
         private Set<String> nonterminals;
         private Set<String> terminals;
+        private Set<String> grammarSymbols;
         private String startSymbol;
         private Map<String, Set<String>> followTable = new HashMap<String, Set<String>>(); // stores follow(A) for non-term A (note: lazy calc)
 
@@ -56,11 +57,13 @@ public class Parser {
                 try {
                     String nextLine = reader.readLine();  // read next line from file
                     // get non-terminals & terminals
-                    String[] nontermSplit = nextLine.split("\\s,\\s");
+                    String[] nontermSplit = nextLine.split(",");
                     nonterminals = new HashSet<>(Arrays.asList(nontermSplit));  // 1st line has non-terminals
                     startSymbol = nontermSplit[0]; // 1st non-term is the start symbol
+                    grammarSymbols = new HashSet<>(nonterminals);
                     nextLine = reader.readLine();
-                    terminals = new HashSet<>(Arrays.asList(nextLine.split("\\s,\\s")));  // 2nd line has terminals
+                    terminals = new HashSet<>(Arrays.asList(nextLine.split(",")));  // 2nd line has terminals
+                    grammarSymbols.addAll(terminals);
                     nextLine = reader.readLine();
 
                     // get productions
@@ -108,6 +111,9 @@ public class Parser {
             terminals = new HashSet<>(grammar.getTerminals());
             if(addTerm != null) terminals.addAll(addTerm);
 
+            grammarSymbols = new HashSet<>(nonterminals);
+            grammarSymbols.addAll(terminals);
+
             productionsSet = new HashSet<>(grammar.getProductionsSet());
             productionsMap = new HashMap<>(grammar.getProductionsMap());
             if(addProd != null) {
@@ -140,8 +146,11 @@ public class Parser {
         Set<String> getTerminals() {
             return new HashSet<>(terminals);
         }
-        public String getStartSymbol() {
+        String getStartSymbol() {
             return startSymbol;
+        }
+        Set<String> getGramSymbols() {
+            return new HashSet<>(grammarSymbols);
         }
 
         /**
@@ -317,25 +326,29 @@ public class Parser {
 
         while (itemAddedFlag) {
             itemAddedFlag = false;
+            Set<String> newJ = new HashSet<>(j);
 
             // "for each item A -> α · B β in j"
             for (String item : j) {
                 String afterDot = item.split("\\s·\\s")[1];
                 String element = afterDot.split("\\s")[0]; // get 1st element after dot (bc elements in items & prod separated by space)
+
                 // check it's a non-term
                 if (!grammar.getNonterminals().contains(element)) continue;
                 Set<String> bodies = grammar.getProductionsMap().get(element);  // get all prod bodies for nonterm after dot in item
 
                 // "for each prod B -> γ of grammar"
-                for (String body : bodies) {
-                    String itemToAdd = element + " -> · " + body;  // item B -> · γ
-                    if (!added.get(element)) {  // if B -> · γ not in j
-                        j.add(itemToAdd);
-                        added.put(element, true);
-                        itemAddedFlag = true;
+                if (!added.getOrDefault(element, false)) {  // if B -> · γ not in j
+
+                    for (String body : bodies) {
+                        String itemToAdd = element + " -> · " + body;  // item B -> · γ
+                        newJ.add(itemToAdd);
                     }
+                    added.put(element, true);
+                    itemAddedFlag = true;
                 }
             }
+            j = newJ;
         }
         return j;
     }
@@ -394,15 +407,18 @@ public class Parser {
         boolean added = true;
         while(added){
             added = false;
+            Set<Set<String>> newC = new HashSet<>(c);
             for(Set<String> itemSet : c){
-                for(String gramSymb : grammar.getTerminals()){
+                for(String gramSymb : grammar.getGramSymbols()){
                     Set<String> gotoResult = calcGoto(itemSet, gramSymb);
-                    if(gotoResult == null || c.contains(gotoResult)) continue;  // goto is empty or goto in c
-                    c.add(gotoResult);
+                    if(gotoResult.isEmpty() || c.contains(gotoResult)) continue;  // goto is empty or goto in c
+                    newC.add(gotoResult);
                     added = true;
                 }
             }
+            c = newC;
         }
+        System.out.println("canonical collection is: "+ c); // TODO remove this
 
         return c;
     }
@@ -411,7 +427,7 @@ public class Parser {
      * Construct the action & goto tables for the SLR parsing table.
      * (stored as fields)
      */
-    private void constructSLRparsingTable(){
+    public void constructSLRparsingTable(){
         Set<Set<String>> canonCollection = calcCanonicalCollection();
         mapIntStToSetOfItems = new ArrayList<>(canonCollection.size()); // map of int states to corresponding set of items
         int c = 0;
@@ -517,16 +533,6 @@ public class Parser {
 
             }else if(action instanceof AcceptAction) break;
             else throw new ParsingError(stack);
-        }
-    }
-
-    public static void main(String[] args) throws IOException {
-        try {
-            File specificationFile = new File("./src/grammar.txt");
-            Parser parser = new Parser(specificationFile);
-
-        }catch (IOException e){
-            throw new IOException("Can't access given file.", e);
         }
     }
 }
