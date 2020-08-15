@@ -387,7 +387,7 @@ public class Parser {
 
             // get string (β) that appears after the gramSymb in the item
             StringBuilder betaStr = new StringBuilder();
-            for(int i = 1; i < elementsAfterDot.length - 1; i++){
+            for(int i = 1; i < elementsAfterDot.length; i++){
                 betaStr.append(" ").append(elementsAfterDot[i]);
             }
 
@@ -425,6 +425,7 @@ public class Parser {
             for(Set<String> itemSet : c){
                 for(String gramSymb : grammar.getGramSymbols()){
                     Set<String> gotoResult = calcGoto(itemSet, gramSymb);
+
                     if(gotoResult.isEmpty() || c.contains(gotoResult)) continue;  // goto is empty or goto in c
                     newC.add(gotoResult);
                     added = true;
@@ -440,32 +441,35 @@ public class Parser {
      * Construct the action & goto tables for the SLR parsing table.
      * (stored as fields)
      */
-    public void constructSLRparsingTable(){
+    void constructSLRparsingTable(){
         Set<Set<String>> canonCollection = calcCanonicalCollection();
         mapIntStToSetOfItems = new ArrayList<>(canonCollection.size()); // map of int states to corresponding set of items
         SLRactionTable = new HashMap<>();  // init tables
         SLRgotoTable = new HashMap<>();
-        int c = 0;
-        
+
+        // init map int to item sets
+        mapIntStToSetOfItems.addAll(canonCollection);
+
         // build states & determine their parsing actions
         for(Set<String> itemSet : canonCollection){
-            mapIntStToSetOfItems.add(itemSet); // include this set in the map int (i.e. repr by index) to Set of items (Strings)
             Map<String, ParserAction> thisSetSLRActionTableEntry = new HashMap<>();  // init action table entry for current state
 
             for(String item : itemSet){
                 String[] elements = item.split("\\s");
+
                 // case c)
                 if(item.equals(augmentedGrammar.getStartSymbol() + " -> " + grammar.getStartSymbol() + " ·")){
                     thisSetSLRActionTableEntry.put("$", new AcceptAction());
                 }
                 // case b)
                 else if(elements[elements.length - 1].equals("·")){
-                    // find string alpha (using StringBuilder...)
+                    // find string alpha (using StringBuilder...) (i.e. item is [A -> α · ])
                     StringBuilder alpha = new StringBuilder();
                     for(int i = 2; i < elements.length - 1; i++){
                         if(i != elements.length - 2) alpha.append(elements[i]).append(" ");
                         else alpha.append(elements[i]);
                     }
+
                     // set the reduce actions
                     for(String term : augmentedGrammar.calcFollow(elements[0])){
                         thisSetSLRActionTableEntry.put(term, new ReduceAction(new Production(elements[0], alpha.toString())));
@@ -476,12 +480,11 @@ public class Parser {
                     // shift actions
                     String terminalA = elements[Arrays.asList(elements).indexOf("·") + 1];
                     Set<String> setItemsJ = calcGoto(itemSet, terminalA);
-                    if(setItemsJ != null) thisSetSLRActionTableEntry.put(terminalA, new ShiftAction(mapIntStToSetOfItems.indexOf(setItemsJ)));
+
+                    if(canonCollection.contains(setItemsJ)) thisSetSLRActionTableEntry.put(terminalA, new ShiftAction(mapIntStToSetOfItems.indexOf(setItemsJ)));
                 }
             }
-
-            SLRactionTable.put(c, thisSetSLRActionTableEntry);  // put entry in SLR action table
-            c++;
+            SLRactionTable.put(mapIntStToSetOfItems.indexOf(itemSet), thisSetSLRActionTableEntry);  // put entry in SLR action table
         }
 
         // construct SLRgotoTable from existent entries in gotoTable
@@ -494,10 +497,15 @@ public class Parser {
         }
 
 
-        // starting state is one constructed from set of items containing [S' -> S]
+        // starting state is one constructed from set of items containing [S' -> · StartSymbol]
         Set<String> startStateItemSet = new HashSet<>();
-        startStateItemSet.add(augmentedGrammar.getStartSymbol() + " -> · " + grammar.getStartSymbol());
-        this.startState = mapIntStToSetOfItems.indexOf(startStateItemSet);
+        String itemToSearchFor = augmentedGrammar.getStartSymbol() + " -> · " + grammar.getStartSymbol();
+        int i = 0;
+        for(; i < mapIntStToSetOfItems.size(); i++){
+            Set<String> currentSet = mapIntStToSetOfItems.get(i);
+            if(currentSet.contains(itemToSearchFor)) break;
+        }
+        this.startState = i;
     }
 
     private Integer calcSLRGoto(Integer state, String gramSymb){
@@ -534,6 +542,8 @@ public class Parser {
         System.out.println("action table: " + SLRactionTable); // TODO remove
         while(true){
             Integer topState = stack.peek();
+            System.out.println("action table entry for topState: "+SLRactionTable.get(topState)); // TODO remove
+            System.out.println(nextToken.getStrName());
             ParserAction action = SLRactionTable.get(topState).getOrDefault(nextToken.getStrName(), new ErrorAction());  // NOT SURE -- MUST MODIFY
 
             if(action instanceof ShiftAction){
