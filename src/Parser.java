@@ -166,21 +166,26 @@ public class Parser {
 
             for(Production prod : productionsSet){
                 List<String> elementsInBody = Arrays.asList(prod.getBody().split("\\s"));
-                // only check productions which contain nonterm in their body
-                if (!elementsInBody.contains(nonterm)) continue;
+                // only check productions which contain nonterm in their body & those which don't have it as the last element of body
+                if (!elementsInBody.contains(nonterm) || nonterm.equals(elementsInBody.get(elementsInBody.size() - 1))) continue;
 
-                // get string of elements after nonterm in the body of this prod
+                // construct string of elements after nonterm in the body of this prod
                 StringBuilder strAfterElement = new StringBuilder();
-                for(String s : elementsInBody.subList(elementsInBody.indexOf(nonterm), elementsInBody.size()-1)){
-                    strAfterElement.append(s);
+                int start = elementsInBody.indexOf(nonterm) + 1;
+                for(int i = start ; i < elementsInBody.size(); i++){
+                    if(i == start) strAfterElement.append(elementsInBody.get(i));
+                    else strAfterElement.append(" ").append(elementsInBody.get(i));
                 }
-                // case/step 1) in follow calc algorithm
-                followSet.addAll(calcFirstForString(strAfterElement.toString()));
-                // case/step 2) in follow calc algorithm
+
+                // case/step 3) in follow calc algorithm
                 if(strAfterElement.toString().equals("") || calcFirstForString(strAfterElement.toString()).contains("ε")){
                     followSet.addAll(
                             calcFollow(prod.getHead())
                     );
+
+                // case/step 2) in follow calc algorithm
+                }else {
+                    followSet.addAll(calcFirstForString(strAfterElement.toString()));
                 }
             }
             return followSet;
@@ -330,6 +335,7 @@ public class Parser {
 
             // "for each item A -> α · B β in j"
             for (String item : j) {
+                if(item.indexOf('·') == item.length() - 1) continue;  // do not consider items w/dot at end
                 String afterDot = item.split("\\s·\\s")[1];
                 String element = afterDot.split("\\s")[0]; // get 1st element after dot (bc elements in items & prod separated by space)
 
@@ -374,11 +380,19 @@ public class Parser {
         for(String item : itemSet){
 
             // check if item has · directly to the left of gramSymb
+            if(item.indexOf('·') == item.length() - 1) continue;  // do not consider items w/dot at end
             String[] splitAtDot = item.split("\\s·\\s");
-            if(!gramSymb.equals(splitAtDot[1].split("\\s")[0])) continue;
+            String[] elementsAfterDot = splitAtDot[1].split("\\s");
+            if(!gramSymb.equals(elementsAfterDot[0])) continue;
+
+            // get string (β) that appears after the gramSymb in the item
+            StringBuilder betaStr = new StringBuilder();
+            for(int i = 1; i < elementsAfterDot.length - 1; i++){
+                betaStr.append(" ").append(elementsAfterDot[i]);
+            }
 
             // add item A -> α gramSymb · β to set
-            itemSetForClosure.add(splitAtDot[0] + " " + gramSymb + " · " + splitAtDot[1]);
+            itemSetForClosure.add(splitAtDot[0] + " " + gramSymb + " ·" + betaStr.toString());
         }
         // calc closure of set of all items A -> α gramSymb · β
         Set<String> result = closure(itemSetForClosure);
@@ -418,7 +432,6 @@ public class Parser {
             }
             c = newC;
         }
-        System.out.println("canonical collection is: "+ c); // TODO remove this
 
         return c;
     }
@@ -430,8 +443,10 @@ public class Parser {
     public void constructSLRparsingTable(){
         Set<Set<String>> canonCollection = calcCanonicalCollection();
         mapIntStToSetOfItems = new ArrayList<>(canonCollection.size()); // map of int states to corresponding set of items
+        SLRactionTable = new HashMap<>();  // init tables
+        SLRgotoTable = new HashMap<>();
         int c = 0;
-
+        
         // build states & determine their parsing actions
         for(Set<String> itemSet : canonCollection){
             mapIntStToSetOfItems.add(itemSet); // include this set in the map int (i.e. repr by index) to Set of items (Strings)
@@ -516,6 +531,7 @@ public class Parser {
         Iterator<Token> iterator = inputStr.iterator(); // to iterate through input in seq
         Token nextToken = iterator.next(); // get 1st input symbol
 
+        System.out.println("action table: " + SLRactionTable); // TODO remove
         while(true){
             Integer topState = stack.peek();
             ParserAction action = SLRactionTable.get(topState).getOrDefault(nextToken.getStrName(), new ErrorAction());  // NOT SURE -- MUST MODIFY
