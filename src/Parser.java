@@ -39,7 +39,7 @@ public class Parser {
         private Set<String> terminals;
         private Set<String> grammarSymbols;
         private String startSymbol;
-        private Map<String, Set<String>> followTable = new HashMap<String, Set<String>>(); // stores follow(A) for non-term A (note: lazy calc)
+        private Map<String, Set<String>> followTable = new HashMap<>(); // stores follow(A) for non-term A (note: lazy calc)
 
         /**
          * Create Grammar object from grammar specification in given file.
@@ -86,6 +86,8 @@ public class Parser {
                     Set<String> followStartSymb = new HashSet<>();
                     followStartSymb.add("$");
                     followTable.put(startSymbol, followStartSymb);
+                    // calc follow for all nonterm
+                    calcAllFollowSets();
 
                 } catch (NullPointerException e) {
                     System.out.println("Incorrect format of input file.");
@@ -132,6 +134,8 @@ public class Parser {
             Set<String> followStartSymb = new HashSet<>();
             followStartSymb.add("$");
             followTable.put(startSymbol, followStartSymb);
+            // calc follow for all nonterm
+            calcAllFollowSets();
         }
 
         Set<Production> getProductionsSet() {
@@ -154,46 +158,81 @@ public class Parser {
         }
 
         /**
-         * Calculates the set of terminals that can appear immediately to the right of
+         * Calculates FOLLOW() for all nonterminals & stores results in followTable.
+         * (FOLLOW(nonterm) repr the set of terminals that can appear immediately to the right of
+         * nonterm (the param) in some sentential form.)
+         */
+        private void calcAllFollowSets(){
+            // init followTable
+            for(String nonterm : nonterminals){
+                followTable.put(nonterm, new HashSet<>());
+            }
+
+            boolean updated = true;
+            while(updated){
+                updated = false;
+
+                // for each nonterm A
+                for(String nonterm : nonterminals){
+
+                    Set<String> followA = followTable.get(nonterm); // get follow sert calc so far for this nonterm
+                    Set<String> bodies = productionsMap.get(nonterm); // get productions for this nonterm (A -> α B β or A -> α B)
+
+                    for(String body : bodies){
+
+                        List<String> elementsInBody = Arrays.asList(body.split("\\s"));
+
+                        for(String element : elementsInBody){
+                            System.out.println("element: " + element); // TODO
+                            if(!nonterminals.contains(element)) continue; // only consider elements which are nonterminals (B)
+
+                            // construct string β (str of elements after this element in the body of this prod)
+                            StringBuilder betaStr = new StringBuilder();
+                            int start = elementsInBody.indexOf(nonterm) + 1;
+                            for (int i = start; i < elementsInBody.size(); i++) {
+                                if (i == start) betaStr.append(elementsInBody.get(i));
+                                else betaStr.append(" ").append(elementsInBody.get(i));
+                            }
+
+                            Set<String> followB = new HashSet<>(followTable.get(element));
+
+                            // case 3 in alg
+                            if (betaStr.toString().equals("")){
+                                followB.addAll(followA);
+                            }else{
+                                Set<String> firstForBetaStr = calcFirstForString(betaStr.toString());
+                                if(firstForBetaStr.contains("ε")){
+                                    followB.addAll(followA);
+                                }
+                                // case 2 in alg
+                                else {
+                                    followB.addAll(firstForBetaStr);
+                                }
+                            }
+
+                            if(!followTable.get(element).containsAll(followB)){
+                                updated = true;
+                                followTable.replace(element, followB);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        /**
+         * Gets FOLLOW(nonterm) from followTable.
          * nonterm (the param) in some sentential form.
          * @param nonterm nonterminal for which to calculate set of terminals
          */
         Set<String> calcFollow(String nonterm){
-            // check if already calc & stored in followTable
-            if(followTable.containsKey(nonterm)) return followTable.get(nonterm);
-            // else calc it
-            Set<String> followSet = new HashSet<>();
-
-            for(Production prod : productionsSet){
-                List<String> elementsInBody = Arrays.asList(prod.getBody().split("\\s"));
-                // only check productions which contain nonterm in their body & those which don't have it as the last element of body
-                if (!elementsInBody.contains(nonterm) || nonterm.equals(elementsInBody.get(elementsInBody.size() - 1))) continue;
-
-                // construct string of elements after nonterm in the body of this prod
-                StringBuilder strAfterElement = new StringBuilder();
-                int start = elementsInBody.indexOf(nonterm) + 1;
-                for(int i = start ; i < elementsInBody.size(); i++){
-                    if(i == start) strAfterElement.append(elementsInBody.get(i));
-                    else strAfterElement.append(" ").append(elementsInBody.get(i));
-                }
-
-                // case/step 3) in follow calc algorithm
-                if(strAfterElement.toString().equals("") || calcFirstForString(strAfterElement.toString()).contains("ε")){
-                    followSet.addAll(
-                            calcFollow(prod.getHead())
-                    );
-
-                // case/step 2) in follow calc algorithm
-                }else {
-                    followSet.addAll(calcFirstForString(strAfterElement.toString()));
-                }
-            }
-            return followSet;
+            return followTable.get(nonterm);
         }
 
         /**
          * Calculates set of items that begin a string derived from the
          * given grammar symbol, gramSymb. That is, FIRST(gramSymb)
+         * Note: grammar must NOT be left recursive.
          * @param gramSymb grammar symbol for which to calculate FIRST set
          */
         private Set<String> calcFirstForGramSymb(String gramSymb){
@@ -300,8 +339,6 @@ public class Parser {
 
     private Grammar grammar;
     private Grammar augmentedGrammar;
-    private Map<Set<String>, Map<String, Set<String>>> gotoTable = new HashMap<>();
-    private Map<Integer, Map<String, Integer>> SLRgotoTable;
     private Map<Integer, Map<String, ParserAction>> SLRactionTable;
     private List<Set<String>> mapIntStToSetOfItems;
     private Integer startState;
@@ -361,26 +398,18 @@ public class Parser {
 
     /**
      * Calculates & returns the value of GOTO(itemSet, gramSymb).
-     * Gets value from gotoTable if previously calculated; otherwise, calculates it & stores it too.
      *
      * @param itemSet set of items
-     * @return set of items forming the closure of the given set of items itemSet
+     * @return set of items given by GOTO(itemSet, gramSymb)
      */
     private Set<String> calcGoto(Set<String> itemSet, String gramSymb){
-
-        // check if already calc & stored in gotoTable
-        if(gotoTable.containsKey(itemSet)) if (gotoTable.get(itemSet).containsKey(gramSymb)) return gotoTable.get(itemSet).get(gramSymb);
-
-        // if not in gotoTable, calculate it
-        Map<String, Set<String>> newEntry = new HashMap<>(); // in case no entry for this itemSet is yet present in table
-
-        Set<String> itemSetForClosure = new HashSet<>();
+        Set<String> result = new HashSet<>();
 
         // "for each item A -> α · gramSymb β in itemSet"
         for(String item : itemSet){
+            if(item.indexOf('·') == item.length() - 1) continue;  // do not consider items w/dot at end
 
             // check if item has · directly to the left of gramSymb
-            if(item.indexOf('·') == item.length() - 1) continue;  // do not consider items w/dot at end
             String[] splitAtDot = item.split("\\s·\\s");
             String[] elementsAfterDot = splitAtDot[1].split("\\s");
             if(!gramSymb.equals(elementsAfterDot[0])) continue;
@@ -392,17 +421,22 @@ public class Parser {
             }
 
             // add item A -> α gramSymb · β to set
+            Set<String> itemSetForClosure = new HashSet<>();
             itemSetForClosure.add(splitAtDot[0] + " " + gramSymb + " ·" + betaStr.toString());
-        }
-        // calc closure of set of all items A -> α gramSymb · β
-        Set<String> result = closure(itemSetForClosure);
-        if(gotoTable.containsKey(itemSet)) gotoTable.get(itemSet).put(gramSymb, result);  // store result in gotoTable
-        else{
-            newEntry.put(gramSymb, result);
-            gotoTable.put(itemSet, newEntry);
+            result.addAll(closure(itemSetForClosure)); // calc closure of set of item A -> α gramSymb · β
         }
 
         return result;
+    }
+
+    /**
+     * Calculates & returns the value of GOTO(state, gramSymb).
+     *
+     * @param state state of SLR parser automaton (integer, it repr a set of items)
+     * @return state which is given by GOTO(state, gramSymb)
+     */
+    private Integer calcSLRGoto(Integer state, String gramSymb){
+        return mapIntStToSetOfItems.indexOf(calcGoto(mapIntStToSetOfItems.get(state), gramSymb));
     }
 
     /**
@@ -443,59 +477,59 @@ public class Parser {
      */
     void constructSLRparsingTable(){
         Set<Set<String>> canonCollection = calcCanonicalCollection();
-        mapIntStToSetOfItems = new ArrayList<>(canonCollection.size()); // map of int states to corresponding set of items
+        mapIntStToSetOfItems = new ArrayList<>(canonCollection); // init map of int states to sets of items
         SLRactionTable = new HashMap<>();  // init tables
-        SLRgotoTable = new HashMap<>();
-
-        // init map int to item sets
-        mapIntStToSetOfItems.addAll(canonCollection);
 
         // build states & determine their parsing actions
+        // for itemSet Ii in canonCollection C = {I0, I1, ..., In}
         for(Set<String> itemSet : canonCollection){
+            int i = mapIntStToSetOfItems.indexOf(itemSet);
+
             Map<String, ParserAction> thisSetSLRActionTableEntry = new HashMap<>();  // init action table entry for current state
 
+            System.out.println(("itemSet: "+itemSet)); //TODO
             for(String item : itemSet){
                 String[] elements = item.split("\\s");
+                System.out.println("item: "+ item); // TODO
 
-                // case c)
+                // case c) [S' -> startSymb] in Ii, then ACTION[i, $] = "accept"
                 if(item.equals(augmentedGrammar.getStartSymbol() + " -> " + grammar.getStartSymbol() + " ·")){
                     thisSetSLRActionTableEntry.put("$", new AcceptAction());
                 }
-                // case b)
-                else if(elements[elements.length - 1].equals("·")){
-                    // find string alpha (using StringBuilder...) (i.e. item is [A -> α · ])
-                    StringBuilder alpha = new StringBuilder();
-                    for(int i = 2; i < elements.length - 1; i++){
-                        if(i != elements.length - 2) alpha.append(elements[i]).append(" ");
-                        else alpha.append(elements[i]);
-                    }
-
-                    // set the reduce actions
-                    for(String term : augmentedGrammar.calcFollow(elements[0])){
-                        thisSetSLRActionTableEntry.put(term, new ReduceAction(new Production(elements[0], alpha.toString())));
-                    }
-                }
                 else{
-                    // case a)
-                    // shift actions
-                    String terminalA = elements[Arrays.asList(elements).indexOf("·") + 1];
-                    Set<String> setItemsJ = calcGoto(itemSet, terminalA);
+                    int dotIndex = Arrays.asList(elements).indexOf("·");
 
-                    if(canonCollection.contains(setItemsJ)) thisSetSLRActionTableEntry.put(terminalA, new ShiftAction(mapIntStToSetOfItems.indexOf(setItemsJ)));
+                    // case b) [A -> α ·] is in Ii
+                    System.out.println("dot last? "+ (dotIndex == elements.length - 1)); // TODO
+                    if(dotIndex == elements.length - 1){
+                        // ACTION[i, a] = "reduce A -> α" for all a in FOLLOW(A)
+                        // find string alpha (using StringBuilder...) (i.e. item is [A -> α · ])
+                        StringBuilder alpha = new StringBuilder();
+                        for(int n = 2; n < elements.length - 1; n++){
+                            if(n != elements.length - 2) alpha.append(elements[n]).append(" ");
+                            else alpha.append(elements[n]);
+                        }
+                        System.out.println("alpha: "+ alpha.toString());// TODO
+                        System.out.println("FOLLOW(" + elements[0]+ "): "+augmentedGrammar.calcFollow(elements[0]));
+                        // set the reduce actions
+                        for(String term : augmentedGrammar.calcFollow(elements[0])){
+                            thisSetSLRActionTableEntry.put(term, new ReduceAction(new Production(elements[0], alpha.toString())));
+                        }
+                    }
+                    // case a) [A -> α · a β] is in Ii and GOTO(Ii, a) = Ij (a must be a terminal)
+                    else{
+                        // ACTION[i, a] = "shift j"
+                        String terminalA = elements[dotIndex + 1];
+                        if(!grammar.getTerminals().contains(terminalA)) break;  // a must be a terminal
+
+                        Integer j = calcSLRGoto(i, terminalA);
+                        if(j >= 0 && j <= mapIntStToSetOfItems.size() - 1) thisSetSLRActionTableEntry.put(terminalA, new ShiftAction(j));
+                    }
                 }
             }
-            SLRactionTable.put(mapIntStToSetOfItems.indexOf(itemSet), thisSetSLRActionTableEntry);  // put entry in SLR action table
+            System.out.println("thissetSKRActionTableEntry: "+thisSetSLRActionTableEntry); //TODO
+            SLRactionTable.put(i, thisSetSLRActionTableEntry);  // put entry in SLR action table
         }
-
-        // construct SLRgotoTable from existent entries in gotoTable
-        for(Map.Entry<Set<String>, Map<String, Set<String>>> entryOuter : gotoTable.entrySet()){
-            Map<String, Integer> newValueOuter = new HashMap<>();
-            for(Map.Entry<String, Set<String>> entryInner : entryOuter.getValue().entrySet()){
-                newValueOuter.put(entryInner.getKey(), mapIntStToSetOfItems.indexOf(entryInner.getValue()));
-            }
-            SLRgotoTable.put(mapIntStToSetOfItems.indexOf(entryOuter.getKey()), newValueOuter);
-        }
-
 
         // starting state is one constructed from set of items containing [S' -> · StartSymbol]
         Set<String> startStateItemSet = new HashSet<>();
@@ -506,25 +540,13 @@ public class Parser {
             if(currentSet.contains(itemToSearchFor)) break;
         }
         this.startState = i;
-    }
 
-    private Integer calcSLRGoto(Integer state, String gramSymb){
-
-        // check if already calc & stored in SLRgotoTable
-        if(SLRgotoTable.containsKey(state)) if (SLRgotoTable.get(state).containsKey(gramSymb)) return SLRgotoTable.get(state).get(gramSymb);
-
-        // if not in SLRgotoTable, calculate it by calling calcGoto
-        Map<String, Integer> newEntry = new HashMap<>(); // in case no entry for this itemSet is yet present in table
-
-        Integer result = mapIntStToSetOfItems.indexOf(calcGoto(mapIntStToSetOfItems.get(state), gramSymb));
-
-        if(SLRgotoTable.containsKey(state)) SLRgotoTable.get(state).put(gramSymb, result);  // store result in gotoTable
-        else{
-            newEntry.put(gramSymb, result);
-            SLRgotoTable.put(state, newEntry);
+        System.out.println("canon collect: "+canonCollection); // TODO
+        System.out.println("map:");
+        for(int t = 0; t < mapIntStToSetOfItems.size(); t++){
+            System.out.println(t + " : " + mapIntStToSetOfItems.get(t));
         }
-
-        return result;
+        System.out.println("SLR action table: "+SLRactionTable);
     }
 
     /**
@@ -539,12 +561,12 @@ public class Parser {
         Iterator<Token> iterator = inputStr.iterator(); // to iterate through input in seq
         Token nextToken = iterator.next(); // get 1st input symbol
 
-        System.out.println("action table: " + SLRactionTable); // TODO remove
         while(true){
             Integer topState = stack.peek();
-            System.out.println("action table entry for topState: "+SLRactionTable.get(topState)); // TODO remove
-            System.out.println(nextToken.getStrName());
             ParserAction action = SLRactionTable.get(topState).getOrDefault(nextToken.getStrName(), new ErrorAction());  // NOT SURE -- MUST MODIFY
+            System.out.println("nextoken: "+nextToken.getStrName());
+            System.out.println("currentstate: "+ topState);
+            System.out.println("action: "+action); // TODO
 
             if(action instanceof ShiftAction){
                 stack.push(((ShiftAction) action).stateToShift);
@@ -555,7 +577,7 @@ public class Parser {
                 for(int i = 0; i < prod.getBody().length(); i++){
                     stack.pop();
                 }
-                stack.push(mapIntStToSetOfItems.indexOf(calcSLRGoto(stack.peek(), prod.getHead())));
+                stack.push(calcSLRGoto(stack.peek(), prod.getHead()));
 
             }else if(action instanceof AcceptAction) break;
             else throw new ParsingError(stack);
