@@ -39,7 +39,8 @@ public class Parser {
         private Set<String> terminals;
         private Set<String> grammarSymbols;
         private String startSymbol;
-        private Map<String, Set<String>> followTable = new HashMap<>(); // stores follow(A) for non-term A (note: lazy calc)
+        private Map<String, Set<String>> followTable = new HashMap<>(); // stores follow(A) for non-term A
+        private Map<String, Set<String>> firstTable = new HashMap<>(); // stores first(x) for grammar symbol A
 
         /**
          * Create Grammar object from grammar specification in given file.
@@ -81,6 +82,9 @@ public class Parser {
 
                         nextLine = reader.readLine();  // read next line
                     }
+
+                    // calc first for all gram symb
+                    calcAllFirstSets();
 
                     // put input right endmarker into follow(start symbol)
                     Set<String> followStartSymb = new HashSet<>();
@@ -130,6 +134,9 @@ public class Parser {
             if(newStartSymb != null) startSymbol = newStartSymb;
             else startSymbol = grammar.startSymbol;
 
+            // calc first for all gram symb
+            calcAllFirstSets();
+
             // put input right endmarker into follow(start symbol)
             Set<String> followStartSymb = new HashSet<>();
             followStartSymb.add("$");
@@ -168,51 +175,46 @@ public class Parser {
                 followTable.put(nonterm, new HashSet<>());
             }
 
-            boolean updated = true;
-            while(updated){
-                updated = false;
+            boolean isUpdated = true;
+            while(isUpdated){
+                isUpdated = false;
 
                 // for each nonterm A
                 for(String nonterm : nonterminals){
-
-                    Set<String> followA = followTable.get(nonterm); // get follow sert calc so far for this nonterm
+                    Set<String> followA = followTable.get(nonterm); // get follow set calc so far for this nonterm
                     Set<String> bodies = productionsMap.get(nonterm); // get productions for this nonterm (A -> α B β or A -> α B)
 
                     for(String body : bodies){
-
                         List<String> elementsInBody = Arrays.asList(body.split("\\s"));
 
+                        // for each nonterm B in prod body
                         for(String element : elementsInBody){
-                            System.out.println("element: " + element); // TODO
                             if(!nonterminals.contains(element)) continue; // only consider elements which are nonterminals (B)
 
                             // construct string β (str of elements after this element in the body of this prod)
                             StringBuilder betaStr = new StringBuilder();
-                            int start = elementsInBody.indexOf(nonterm) + 1;
+                            int start = elementsInBody.indexOf(element) + 1;
                             for (int i = start; i < elementsInBody.size(); i++) {
                                 if (i == start) betaStr.append(elementsInBody.get(i));
                                 else betaStr.append(" ").append(elementsInBody.get(i));
                             }
 
-                            Set<String> followB = new HashSet<>(followTable.get(element));
+                            Set<String> newFollowB = new HashSet<>(followTable.get(element));
 
-                            // case 3 in alg
-                            if (betaStr.toString().equals("")){
-                                followB.addAll(followA);
-                            }else{
+                            // case 3 in alg: prod A -> α B or A -> α B β where epsilon in FIRST(β)
+                            if(betaStr.toString().equals("")) newFollowB.addAll(followA);
+                            else{
                                 Set<String> firstForBetaStr = calcFirstForString(betaStr.toString());
-                                if(firstForBetaStr.contains("ε")){
-                                    followB.addAll(followA);
-                                }
-                                // case 2 in alg
-                                else {
-                                    followB.addAll(firstForBetaStr);
-                                }
+                                if(firstForBetaStr.contains("ε")) newFollowB.addAll(followA);
+                                // case 2
+                                firstForBetaStr.remove("ε");
+                                newFollowB.addAll(firstForBetaStr);
                             }
 
-                            if(!followTable.get(element).containsAll(followB)){
-                                updated = true;
-                                followTable.replace(element, followB);
+                            //if(!followTable.get(element).containsAll(newFollowB)){
+                            if(followTable.get(element).size() != newFollowB.size()){
+                                isUpdated = true;
+                                followTable.replace(element, newFollowB);
                             }
                         }
                     }
@@ -226,45 +228,66 @@ public class Parser {
          * @param nonterm nonterminal for which to calculate set of terminals
          */
         Set<String> calcFollow(String nonterm){
-            return followTable.get(nonterm);
+            return new HashSet<>(followTable.get(nonterm));
         }
 
         /**
          * Calculates set of items that begin a string derived from the
          * given grammar symbol, gramSymb. That is, FIRST(gramSymb)
          * Note: grammar must NOT be left recursive.
-         * @param gramSymb grammar symbol for which to calculate FIRST set
+         *
          */
-        private Set<String> calcFirstForGramSymb(String gramSymb){
-            Set<String> result = new HashSet<>();
-            if(gramSymb.equals("ε")) result.add("ε");
-            else if(terminals.contains(gramSymb)) result.add(gramSymb); // if terminal, then first(gramSymb) = {gramSymb}
-            else{
-                // calc first(gramSymb) set for gramSymb a non-terminal
-                Set<String> bodies = productionsMap.get(gramSymb);
+        private void calcAllFirstSets(){
+            // init firstTable
+            for(String gramSymb : grammarSymbols){
+                Set<String> setToAddInit = new HashSet<>();
+                if(terminals.contains(gramSymb)) setToAddInit.add(gramSymb); // if terminal, then first(gramSymb) = {gramSymb}
+                firstTable.put(gramSymb, setToAddInit);
+            }
 
-                for(String body : bodies){
-                    // prod gramSymb —> Y1 Y2 ... Yk, a in FIRST(gramSymb) if:
-                    // for some i, a in FIRST(Yi) & ε in all of FIRST(Y1),..., FIRST(Yi-1);
+            boolean updated = true;
 
-                    String[] elements = body.split("\\s"); // get the elements (Yi)
-                    boolean allElReducedToEmpty = true;
+            while(updated) {
+                updated = false;
 
-                    for(String element : elements){
-                        Set<String> firstSetForElement = calcFirstForGramSymb(element);
-                        result.addAll(firstSetForElement);
-                        // only continue to next element if this one can be reduced to ε
-                        if(!firstSetForElement.contains("ε")){
-                            allElReducedToEmpty = false;
-                            break;
+                // update first(nonterm) set
+                for (String nonterm : nonterminals) {
+                    Set<String> newFirstX = new HashSet<>(firstTable.get(nonterm)); // get current FIRST set calc so far
+                    Set<String> bodies = productionsMap.get(nonterm);
+
+                    for (String body : bodies) {
+                        // prod X (nonterm) —> Y1 Y2 ... Yk, a in FIRST(nonterm X) if:
+                        // for some i, a in FIRST(Yi) & ε in all of FIRST(Y1),..., FIRST(Yi-1);
+                        String[] elements = body.split("\\s"); // get the elements (Yi)
+                        boolean allElReducedToEmpty = true;
+
+                        for (String element : elements) {
+                            Set<String> firstSetForElement = firstTable.get(element);
+                            newFirstX.addAll(firstSetForElement);
+                            // only continue to next element if this one can be reduced to ε
+                            if (!firstSetForElement.contains("ε")) {
+                                allElReducedToEmpty = false;
+                                break;
+                            }
                         }
+                        // ε in FIRST(gramSymb) only if all elements can be reduced to ε
+                        if (!allElReducedToEmpty && !bodies.contains("ε")) newFirstX.remove("ε");
                     }
 
-                    // ε in FIRST(gramSymb) only if all elements can be reduced to ε
-                    if(!allElReducedToEmpty) result.remove("ε");
+                    if(!firstTable.get(nonterm).containsAll(newFirstX)){
+                        updated = true;
+                        firstTable.replace(nonterm, newFirstX);
+                    }
                 }
             }
-            return result;
+        }
+
+        /**
+         * Gets FIRST(gramSymb) from firstTable.
+         * @param gramSymb grammar symbol for which to calculate set of terminals
+         */
+        private Set<String> calcFirstForGramSymb(String gramSymb){
+            return new HashSet<>(firstTable.get(gramSymb));
         }
 
         /**
@@ -373,8 +396,12 @@ public class Parser {
             // "for each item A -> α · B β in j"
             for (String item : j) {
                 if(item.indexOf('·') == item.length() - 1) continue;  // do not consider items w/dot at end
-                String afterDot = item.split("\\s·\\s")[1];
+                String[] splitAtDot = item.split("\\s·\\s");
+                String afterDot = splitAtDot[1];
                 String element = afterDot.split("\\s")[0]; // get 1st element after dot (bc elements in items & prod separated by space)
+
+                // if it's ε, (i.e. A -> · ε), then add A -> ε · to closure set (newJ)
+                if(element.equals("ε")) newJ.add(splitAtDot[0] + " ε ·");
 
                 // check it's a non-term
                 if (!grammar.getNonterminals().contains(element)) continue;
@@ -409,10 +436,10 @@ public class Parser {
         for(String item : itemSet){
             if(item.indexOf('·') == item.length() - 1) continue;  // do not consider items w/dot at end
 
-            // check if item has · directly to the left of gramSymb
+
             String[] splitAtDot = item.split("\\s·\\s");
             String[] elementsAfterDot = splitAtDot[1].split("\\s");
-            if(!gramSymb.equals(elementsAfterDot[0])) continue;
+            if(!gramSymb.equals(elementsAfterDot[0])) continue; // check if item has · directly to the left of gramSymb
 
             // get string (β) that appears after the gramSymb in the item
             StringBuilder betaStr = new StringBuilder();
@@ -487,47 +514,39 @@ public class Parser {
 
             Map<String, ParserAction> thisSetSLRActionTableEntry = new HashMap<>();  // init action table entry for current state
 
-            System.out.println(("itemSet: "+itemSet)); //TODO
             for(String item : itemSet){
                 String[] elements = item.split("\\s");
-                System.out.println("item: "+ item); // TODO
 
                 // case c) [S' -> startSymb] in Ii, then ACTION[i, $] = "accept"
                 if(item.equals(augmentedGrammar.getStartSymbol() + " -> " + grammar.getStartSymbol() + " ·")){
                     thisSetSLRActionTableEntry.put("$", new AcceptAction());
-                }
-                else{
+                }else {
                     int dotIndex = Arrays.asList(elements).indexOf("·");
 
                     // case b) [A -> α ·] is in Ii
-                    System.out.println("dot last? "+ (dotIndex == elements.length - 1)); // TODO
-                    if(dotIndex == elements.length - 1){
+                    if (dotIndex == elements.length - 1) {
                         // ACTION[i, a] = "reduce A -> α" for all a in FOLLOW(A)
                         // find string alpha (using StringBuilder...) (i.e. item is [A -> α · ])
                         StringBuilder alpha = new StringBuilder();
-                        for(int n = 2; n < elements.length - 1; n++){
-                            if(n != elements.length - 2) alpha.append(elements[n]).append(" ");
+                        for (int n = 2; n < elements.length - 1; n++) {
+                            if (n != elements.length - 2) alpha.append(elements[n]).append(" ");
                             else alpha.append(elements[n]);
                         }
-                        System.out.println("alpha: "+ alpha.toString());// TODO
-                        System.out.println("FOLLOW(" + elements[0]+ "): "+augmentedGrammar.calcFollow(elements[0]));
+
                         // set the reduce actions
-                        for(String term : augmentedGrammar.calcFollow(elements[0])){
+                        for (String term : augmentedGrammar.calcFollow(elements[0])) {
                             thisSetSLRActionTableEntry.put(term, new ReduceAction(new Production(elements[0], alpha.toString())));
                         }
-                    }
-                    // case a) [A -> α · a β] is in Ii and GOTO(Ii, a) = Ij (a must be a terminal)
-                    else{
+                    }else{ // case a) [A -> α · a β] is in Ii and GOTO(Ii, a) = Ij (a must be a terminal)
                         // ACTION[i, a] = "shift j"
                         String terminalA = elements[dotIndex + 1];
-                        if(!grammar.getTerminals().contains(terminalA)) break;  // a must be a terminal
+                        if(!grammar.getTerminals().contains(terminalA)) continue;  // a must be a terminal
 
                         Integer j = calcSLRGoto(i, terminalA);
                         if(j >= 0 && j <= mapIntStToSetOfItems.size() - 1) thisSetSLRActionTableEntry.put(terminalA, new ShiftAction(j));
                     }
                 }
             }
-            System.out.println("thissetSKRActionTableEntry: "+thisSetSLRActionTableEntry); //TODO
             SLRactionTable.put(i, thisSetSLRActionTableEntry);  // put entry in SLR action table
         }
 
@@ -541,12 +560,30 @@ public class Parser {
         }
         this.startState = i;
 
+        /*//goto table print
+        for(int k= 0; k < mapIntStToSetOfItems.size(); k++){
+            for(String term : grammar.getTerminals()){
+                System.out.println("GOTO(" + k + ", " + term + ") = " + calcSLRGoto(k,term));
+            }
+        }
+
+        System.out.println("start state: "+startState);
         System.out.println("canon collect: "+canonCollection); // TODO
         System.out.println("map:");
         for(int t = 0; t < mapIntStToSetOfItems.size(); t++){
             System.out.println(t + " : " + mapIntStToSetOfItems.get(t));
         }
-        System.out.println("SLR action table: "+SLRactionTable);
+
+        System.out.println("SLR action table: ");
+        for(Map.Entry<Integer, Map<String, ParserAction>> entry : SLRactionTable.entrySet()){
+            System.out.println(entry.getKey()+" ------------------");
+            for(Map.Entry<String, ParserAction> entryInner : entry.getValue().entrySet()){
+                System.out.println(entryInner);
+            }
+        }
+
+         */
+
     }
 
     /**

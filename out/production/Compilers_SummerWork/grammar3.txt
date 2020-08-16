@@ -1,5 +1,5 @@
-stmt,N,sign,E,S,F,T
-INT,FLOAT,PLUS,MINUS,MULT,COS,FACTORIAL
+stmt,N,sign,E,S,F,T,E'
+INT,FLOAT,PLUS,MINUS,MULT,COS,FACTORIAL,ε
 stmt -> N | E
 N -> sign FLOAT | sign INT
 sign -> MINUS | ε
