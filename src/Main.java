@@ -16,7 +16,7 @@ public class Main {
             File inputFile = new  File("./src/input.txt");
             List<Token> tokenStream = LexicalAnalyser.scan(inputFile);
 
-            File specificationFile = new File("./src/grammar3.txt");
+            File specificationFile = new File("./src/grammar4.txt");
             Parser parser = new Parser(specificationFile);
             parser.constructSLRparsingTable();
 

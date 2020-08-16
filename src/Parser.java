@@ -600,10 +600,12 @@ public class Parser {
 
         while(true){
             Integer topState = stack.peek();
-            ParserAction action = SLRactionTable.get(topState).getOrDefault(nextToken.getStrName(), new ErrorAction());  // NOT SURE -- MUST MODIFY
-            System.out.println("nextoken: "+nextToken.getStrName());
-            System.out.println("currentstate: "+ topState);
-            System.out.println("action: "+action); // TODO
+            ParserAction action = SLRactionTable.get(topState).getOrDefault(nextToken.getStrName(), new ErrorAction());
+            System.out.println("stack: "+stack);
+            System.out.println("nextToken: "+nextToken.getStrName());
+            System.out.println("currentstate: "+ topState + "   <=>   " + mapIntStToSetOfItems.get(topState));
+            System.out.println("action[currentSt, nextToken]= "+action); // TODO
+            System.out.println("__________________");
 
             if(action instanceof ShiftAction){
                 stack.push(((ShiftAction) action).stateToShift);
@@ -611,12 +613,16 @@ public class Parser {
 
             }else if(action instanceof ReduceAction){
                 Production prod = ((ReduceAction) action).prodToReduceBy;
-                for(int i = 0; i < prod.getBody().length(); i++){
-                    stack.pop();
-                }
-                stack.push(calcSLRGoto(stack.peek(), prod.getHead()));
+                if(!prod.getBody().equals("ε")) {
+                    for (int i = 0; i < prod.getBody().split(" ").length; i++) {
+                        stack.pop();
+                    }
+                    stack.push(calcSLRGoto(stack.peek(), prod.getHead()));
+                }else stack.push(calcSLRGoto(topState, prod.getHead()));
+                System.out.println(prod);
 
             }else if(action instanceof AcceptAction) break;
+
             else throw new ParsingError(stack);
         }
     }
