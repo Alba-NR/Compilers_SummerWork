@@ -86,10 +86,6 @@ public class Parser {
                     // calc first for all gram symb
                     calcAllFirstSets();
 
-                    // put input right endmarker into follow(start symbol)
-                    Set<String> followStartSymb = new HashSet<>();
-                    followStartSymb.add("$");
-                    followTable.put(startSymbol, followStartSymb);
                     // calc follow for all nonterm
                     calcAllFollowSets();
 
@@ -137,10 +133,6 @@ public class Parser {
             // calc first for all gram symb
             calcAllFirstSets();
 
-            // put input right endmarker into follow(start symbol)
-            Set<String> followStartSymb = new HashSet<>();
-            followStartSymb.add("$");
-            followTable.put(startSymbol, followStartSymb);
             // calc follow for all nonterm
             calcAllFollowSets();
         }
@@ -174,6 +166,11 @@ public class Parser {
             for(String nonterm : nonterminals){
                 followTable.put(nonterm, new HashSet<>());
             }
+
+            // put input right endmarker into follow(start symbol)
+            Set<String> followStartSymb = followTable.get(startSymbol);
+            followStartSymb.add("INPUTENDMARKER");
+            followTable.replace(startSymbol, followStartSymb);
 
             boolean isUpdated = true;
             while(isUpdated){
@@ -373,7 +370,7 @@ public class Parser {
         Set<String> newNonterm = new HashSet<>();
         newNonterm.add("S'");
         Set<Production> newProd = new HashSet<>();
-        newProd.add(new Production("S'", "S"));
+        newProd.add(new Production("S'", grammar.getStartSymbol()));
 
         augmentedGrammar = new Grammar(grammar, newNonterm, null, newProd, "S'");
     }
@@ -519,7 +516,7 @@ public class Parser {
 
                 // case c) [S' -> startSymb] in Ii, then ACTION[i, $] = "accept"
                 if(item.equals(augmentedGrammar.getStartSymbol() + " -> " + grammar.getStartSymbol() + " ·")){
-                    thisSetSLRActionTableEntry.put("$", new AcceptAction());
+                    thisSetSLRActionTableEntry.put("INPUTENDMARKER", new AcceptAction());
                 }else {
                     int dotIndex = Arrays.asList(elements).indexOf("·");
 
@@ -559,31 +556,6 @@ public class Parser {
             if(currentSet.contains(itemToSearchFor)) break;
         }
         this.startState = i;
-
-        /*//goto table print
-        for(int k= 0; k < mapIntStToSetOfItems.size(); k++){
-            for(String term : grammar.getTerminals()){
-                System.out.println("GOTO(" + k + ", " + term + ") = " + calcSLRGoto(k,term));
-            }
-        }
-
-        System.out.println("start state: "+startState);
-        System.out.println("canon collect: "+canonCollection); // TODO
-        System.out.println("map:");
-        for(int t = 0; t < mapIntStToSetOfItems.size(); t++){
-            System.out.println(t + " : " + mapIntStToSetOfItems.get(t));
-        }
-
-        System.out.println("SLR action table: ");
-        for(Map.Entry<Integer, Map<String, ParserAction>> entry : SLRactionTable.entrySet()){
-            System.out.println(entry.getKey()+" ------------------");
-            for(Map.Entry<String, ParserAction> entryInner : entry.getValue().entrySet()){
-                System.out.println(entryInner);
-            }
-        }
-
-         */
-
     }
 
     /**
