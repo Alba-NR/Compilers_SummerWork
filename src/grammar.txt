@@ -1,12 +1,9 @@
-stmt,N,F,I,D,sign,E,S,factor,T
-0,1,2,3,4,5,6,7,8,9,.,+,-,*,cos,!
+stmt,N,E,S,F,T,E'
+INT,FLOAT,PLUS,MINUS,MULT,COS,FACTORIAL,ε
 stmt -> N | E
-N -> F | I
-F -> sign I . I
-I -> D I | D
-sign -> - | ε
-D -> 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
-E -> E + S | E - S | S
-S -> factor * S | factor
-factor -> cos factor | T
-T -> I ! | N
+N -> INT | FLOAT | MINUS FLOAT | MINUS INT
+E -> S E'
+E' -> PLUS S E' | MINUS S E' | ε
+S -> F MULT S | F
+F -> COS F | T
+T -> INT FACTORIAL | N

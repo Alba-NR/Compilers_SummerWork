@@ -1,9 +1,0 @@
-stmt,N,sign,E,S,F,T
-INT,FLOAT,PLUS,MINUS,MULT,COS,FACTORIAL
-stmt -> N | E
-N -> sign FLOAT | sign INT
-sign -> MINUS | ε
-E -> E PLUS S | E MINUS S | S
-S -> F MULT S | F
-F -> COS F | T
-T -> INT FACTORIAL | N

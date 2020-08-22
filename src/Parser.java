@@ -573,11 +573,6 @@ public class Parser {
         while(true){
             Integer topState = stack.peek();
             ParserAction action = SLRactionTable.get(topState).getOrDefault(nextToken.getStrName(), new ErrorAction());
-            System.out.println("stack: "+stack);
-            System.out.println("nextToken: "+nextToken.getStrName());
-            System.out.println("currentstate: "+ topState + "   <=>   " + mapIntStToSetOfItems.get(topState));
-            System.out.println("action[currentSt, nextToken]= "+action); // TODO
-            System.out.println("__________________");
 
             if(action instanceof ShiftAction){
                 stack.push(((ShiftAction) action).stateToShift);
@@ -595,7 +590,7 @@ public class Parser {
 
             }else if(action instanceof AcceptAction) break;
 
-            else throw new ParsingError(stack);
+            else throw new ParsingError(stack, nextToken);
         }
     }
 }

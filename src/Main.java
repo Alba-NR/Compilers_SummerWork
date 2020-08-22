@@ -4,19 +4,12 @@ import java.util.List;
 
 public class Main {
     public static void main(String[] args) throws IOException, InvalidCharException, ParsingError{
-        /*
-        File inputFile = new  File("./src/input.txt");
-        List<Token> tokenStream = LexicalAnalyser.scan(inputFile);
-
-        System.out.println(tokenStream);
-        */
-        // code commented out above works :)
 
         try {
             File inputFile = new  File("./src/input.txt");
             List<Token> tokenStream = LexicalAnalyser.scan(inputFile);
 
-            File specificationFile = new File("./src/grammar4.txt");
+            File specificationFile = new File("./src/grammar.txt");
             Parser parser = new Parser(specificationFile);
             parser.constructSLRparsingTable();
 
