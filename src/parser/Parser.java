@@ -589,7 +589,14 @@ public class Parser {
 
             if(action instanceof ShiftAction){
                 stack.push(((ShiftAction) action).stateToShift);    // push state onto stack
-                nodeStack.push(new ParseTreeNode(nextToken.getStrName(), null)); // create node for term & push onto stack
+                // create node for terminal & push onto stack
+                List<ParseTreeNode> child = null;
+                if(nextToken.getStrName().equals("INT") || nextToken.getStrName().equals("FLOAT")){
+                    // if INT or FLOAT, add numeric value as child
+                    child = new ArrayList<>();
+                    child.add(new ParseTreeNode(nextToken.getValue().toString(), null));
+                }
+                nodeStack.push(new ParseTreeNode(nextToken.getStrName(), child));
                 nextToken = iterator.next();
 
             }else if(action instanceof ReduceAction){
