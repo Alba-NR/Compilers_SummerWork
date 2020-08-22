@@ -1,3 +1,4 @@
+package lexer;
 
 public class Token<T> {
     /**
@@ -7,7 +8,7 @@ public class Token<T> {
     private TokenName name;
     private T value;
 
-    Token(TokenName name, T value){
+    public Token(TokenName name, T value){
         this.name = name;
         this.value = value;
     }

@@ -1,3 +1,5 @@
+package lexer;
+
 /** Specifies the possible token names */
 public enum TokenName {
     FLOAT,

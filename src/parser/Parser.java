@@ -1,3 +1,8 @@
+package parser;
+
+import lexer.Token;
+import lexer.TokenName;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -46,7 +51,8 @@ public class Parser {
          * Create Grammar object from grammar specification in given file.
          * Note: the grammarSpecification file must have the following format:
          *  - 1st line: non-terminals, separated by a comma. 1st one is start symbol.
-         *  - 2nd line: terminals, separated by a comma
+         *  - 2nd line: terminals, separated by a comma.
+         *  - Note: if grammar has "ε" in any production body, must include ε in the 2nd line w/the terminals
          *  - then, one production per line
          *  - preferably a single production per non-terminal for clarity
          */
@@ -90,7 +96,7 @@ public class Parser {
                     calcAllFollowSets();
 
                 } catch (NullPointerException e) {
-                    System.out.println("Incorrect format of input file.");
+                    System.out.println("Incorrect format of grammar file.");
                 }
 
             } catch (IOException e) {
@@ -499,7 +505,7 @@ public class Parser {
      * Construct the action & goto tables for the SLR parsing table.
      * (stored as fields)
      */
-    void constructSLRparsingTable(){
+    public void constructSLRparsingTable(){
         Set<Set<String>> canonCollection = calcCanonicalCollection();
         mapIntStToSetOfItems = new ArrayList<>(canonCollection); // init map of int states to sets of items
         SLRactionTable = new HashMap<>();  // init tables
@@ -559,38 +565,61 @@ public class Parser {
     }
 
     /**
-     * LR parsing program
-     * must call constructSLRparsing table before
+     * LR parsing program. Builds a parse tree from the given input string.
+     *  - Must call constructSLRparsing table before calling this method.
+     * @param inputStr {@link List<Token>} stream of tokens from lexer
+     * @return root node of the parse tree
      */
-    void parse(List<Token> inputStr) throws ParsingError {
+    public ParseTreeNode parse(List<Token> inputStr) throws ParsingError {
         Stack<Integer> stack = new Stack<>();  // create parsing stack
         stack.push(startState);  // initially, starting state is on stack
         inputStr.add(new Token<>(TokenName.INPUTENDMARKER, "$"));  // add input endmarker to input str
 
+        Stack<ParseTreeNode> nodeStack = new Stack<>(); // create node stack for building parse tree
+
         Iterator<Token> iterator = inputStr.iterator(); // to iterate through input in seq
         Token nextToken = iterator.next(); // get 1st input symbol
+
+        System.out.println("------------------");
+        System.out.println("Reductions output by parser: \n---");
 
         while(true){
             Integer topState = stack.peek();
             ParserAction action = SLRactionTable.get(topState).getOrDefault(nextToken.getStrName(), new ErrorAction());
 
             if(action instanceof ShiftAction){
-                stack.push(((ShiftAction) action).stateToShift);
+                stack.push(((ShiftAction) action).stateToShift);    // push state onto stack
+                nodeStack.push(new ParseTreeNode(nextToken.getStrName(), null)); // create node for term & push onto stack
                 nextToken = iterator.next();
 
             }else if(action instanceof ReduceAction){
-                Production prod = ((ReduceAction) action).prodToReduceBy;
+                Production prod = ((ReduceAction) action).prodToReduceBy;  // get prod A -> β
+
                 if(!prod.getBody().equals("ε")) {
+                    List<ParseTreeNode> children = new ArrayList<>();
+                    // pop |β| symbols & nodes off stack & nodeStack respectively
                     for (int i = 0; i < prod.getBody().split(" ").length; i++) {
                         stack.pop();
+                        children.add(nodeStack.pop());
                     }
-                    stack.push(calcSLRGoto(stack.peek(), prod.getHead()));
-                }else stack.push(calcSLRGoto(topState, prod.getHead()));
-                System.out.println(prod);
+                    stack.push(calcSLRGoto(stack.peek(), prod.getHead()));  // push GOTO[st on top of stack, A] onto stack
+                    nodeStack.push(new ParseTreeNode(prod.getHead(), children)); // create node for non-term & push onto stack
+
+                }else{ // ε production
+                    stack.push(calcSLRGoto(topState, prod.getHead()));  // push GOTO[st on top of stack, A] onto stack
+                    // create node for non-term
+                    List<ParseTreeNode> children = new ArrayList<>();
+                    children.add(new ParseTreeNode("ε", null));
+                    nodeStack.push(new ParseTreeNode(prod.getHead(), children)); // push node onto stack
+                }
+
+                System.out.println(prod);  // output production A -> β
 
             }else if(action instanceof AcceptAction) break;
 
             else throw new ParsingError(stack, nextToken);
         }
+
+        return nodeStack.pop(); // return root node
     }
 }
