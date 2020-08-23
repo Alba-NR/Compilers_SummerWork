@@ -1,7 +1,8 @@
-stmt,N,E,S,F,T,E'
+stmt,N,E,S,F,T,E',sign
 INT,FLOAT,PLUS,MINUS,MULT,COS,FACTORIAL,ε
 stmt -> N | E
-N -> INT | FLOAT | MINUS FLOAT | MINUS INT
+N -> sign INT | sign FLOAT
+sign -> MINUS | ε
 E -> S E'
 E' -> PLUS S E' | MINUS S E' | ε
 S -> F MULT S | F

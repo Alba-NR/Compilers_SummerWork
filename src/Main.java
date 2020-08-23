@@ -67,6 +67,5 @@ public class Main {
 
     public static void main(String[] args) throws IOException, InvalidCharException, ParsingError {
         runProgram("./src/input.txt", "./src/grammar.txt");
-
     }
 }
