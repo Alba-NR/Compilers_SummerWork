@@ -1,7 +1,9 @@
-# Compilers IA to IB summer work: Lexical Analyser and SLR parser in Java.
+# :computer: Compilers IA to IB summer work: Lexical Analyser and SLR parser in Java.
 This is my implementation of a lexer/lexical analyser and an SLR parser in Java for my IA to IB compilers summer work task. (*Note: "Part IA" is the 1st year of the Computer Science Tripos at Cambridge. "Part IB" corresponds to the second year.*)
 
 **:pushpin: Note:** This repository is set to public to showcase this project; however, this doesn't mean the code can be freely copied and used, please see the [Copyright Notice](#grey_exclamation-copyright-notice) below.
+
+---
 
 ## :clipboard: Task Description
 > "You are to write a lexer and a parser for a new calculator application. The calculator is to read in ASCII strings containing arithmetic expressions (e.g. “2.3+4”) and you
@@ -20,6 +22,8 @@ This is my implementation of a lexer/lexical analyser and an SLR parser in Java 
 > 1. List the terminal and non-terminal symbols of the language, and define an entry point for the grammar of calculations: a statement is a number or a valid application of one of the operators.
 > 1. Write a program to lex an input ASCII string into tokens accepted by this language.
 > 1. Write a parser based on an LR(0) technique to convert the token stream into a parse tree.
+
+---
 
 ## :thought_balloon: My Solution
 I organised my compiler front-end (the lexical analyser & the parser) into 2 Java packages:
@@ -110,7 +114,9 @@ stmt
                         └── MINUS
 ```
 
+---
 
 ## :grey_exclamation: Copyright Notice
 
 Copyright &copy; 2020 Alba Navarro Rosales. All rights reserved. Please do not copy or modify the design or software in this repository for any purpose other than with the express written permission of the author, neither claim it as your own. Do check [this](https://choosealicense.com/no-permission/) out, thanks! :)
+<br>:point_up: And remember- plagiarism is bad!
